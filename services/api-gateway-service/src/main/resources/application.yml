@@ -1,7 +1,42 @@
+server:
+  port: 8080
+
 spring:
-  flyway:
-    enabled: true
-    locations: classpath:db/migration
-    ignore-migration-patterns: "*:Missing"
-    out-of-order: false
-    baseline-on-migrate: false
+  application:
+    name: api-gateway-service
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${KEYCLOAK_URL:http://localhost:8180}/realms/${KEYCLOAK_REALM:trade-settlement}/protocol/openid-connect/certs
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+keycloak:
+  url: ${KEYCLOAK_URL:http://localhost:8180}
+  realm: ${KEYCLOAK_REALM:trade-settlement}
+  client-id: ${KEYCLOAK_CLIENT_ID:trade-api}
+
+services:
+  trade-ingest-url: ${TRADE_INGEST_SERVICE_URL:http://localhost:8082}
+  breach-detector-url: ${BREACH_DETECTOR_SERVICE_URL:http://localhost:8083}
+  commentary-url: ${COMMENTARY_SERVICE_URL:http://localhost:8084}
+
+rate-limit:
+  requests-per-minute: ${RATE_LIMIT_RPM:100}
+  window-seconds: 60
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [%X{userId}] [%X{requestId}] %-5level %logger{36} - %msg%n"
