@@ -1,0 +1,92 @@
+{
+  "realm": "trade-settlement",
+  "enabled": true,
+  "displayName": "Trade Settlement",
+  "roles": {
+    "realm": [
+      {
+        "name": "ops-user",
+        "description": "Operations user role"
+      },
+      {
+        "name": "compliance-officer",
+        "description": "Compliance officer role"
+      },
+      {
+        "name": "admin",
+        "description": "Administrator role"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "trade-api",
+      "name": "Trade API",
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "*"
+      ],
+      "webOrigins": [
+        "*"
+      ],
+      "enabled": true
+    }
+  ],
+  "users": [
+    {
+      "username": "ops-user-test",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Ops",
+      "lastName": "Tester",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "ops-user-pass",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "ops-user"
+      ]
+    },
+    {
+      "username": "compliance-officer-test",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Compliance",
+      "lastName": "Tester",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "compliance-pass",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "compliance-officer"
+      ]
+    },
+    {
+      "username": "admin-test",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "Tester",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin-pass",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "admin"
+      ]
+    }
+  ]
+}
