@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "DlqEvent",
+  "namespace": "com.tsengine.schema",
+  "fields": [
+    {"name": "originalTopic", "type": "string"},
+    {"name": "originalPayload", "type": "string"},
+    {"name": "errorMessage", "type": "string"},
+    {"name": "errorClass", "type": "string"},
+    {"name": "retryCount", "type": "int"},
+    {"name": "failedAt", "type": "long", "logicalType": "timestamp-millis"}
+  ]
+}

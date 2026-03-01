@@ -1,0 +1,17 @@
+{
+  "type": "record",
+  "name": "CommentaryCompleted",
+  "namespace": "com.tsengine.schema",
+  "fields": [
+    {"name": "commentaryId", "type": "string"},
+    {"name": "breachId", "type": "string"},
+    {"name": "tradeId", "type": "string"},
+    {"name": "content", "type": "string"},
+    {"name": "generationType", "type": "string"},
+    {"name": "promptVersion", "type": "string"},
+    {"name": "costUsd", "type": "double", "default": 0.0},
+    {"name": "tokensInput", "type": "int", "default": 0},
+    {"name": "tokensOutput", "type": "int", "default": 0},
+    {"name": "completedAt", "type": "long", "logicalType": "timestamp-millis"}
+  ]
+}

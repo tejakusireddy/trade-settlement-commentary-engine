@@ -1,0 +1,17 @@
+{
+  "type": "record",
+  "name": "CommentaryRequest",
+  "namespace": "com.tsengine.schema",
+  "fields": [
+    {"name": "requestId", "type": "string"},
+    {"name": "breachId", "type": "string"},
+    {"name": "tradeId", "type": "string"},
+    {"name": "instrument", "type": "string"},
+    {"name": "counterparty", "type": "string"},
+    {"name": "breachType", "type": "string"},
+    {"name": "breachReason", "type": "string"},
+    {"name": "daysOverdue", "type": "int"},
+    {"name": "tradeDate", "type": "string"},
+    {"name": "requestedAt", "type": "long", "logicalType": "timestamp-millis"}
+  ]
+}

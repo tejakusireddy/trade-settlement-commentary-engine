@@ -1,0 +1,18 @@
+{
+  "type": "record",
+  "name": "TradeEvent",
+  "namespace": "com.tsengine.schema",
+  "fields": [
+    {"name": "tradeId", "type": "string"},
+    {"name": "instrument", "type": "string"},
+    {"name": "tradeDate", "type": "string"},
+    {"name": "expectedSettlementDate", "type": "string"},
+    {"name": "counterparty", "type": "string"},
+    {"name": "quantity", "type": "string"},
+    {"name": "price", "type": "string"},
+    {"name": "currency", "type": "string", "default": "USD"},
+    {"name": "status", "type": "string", "default": "PENDING"},
+    {"name": "idempotencyKey", "type": "string"},
+    {"name": "timestamp", "type": "long", "logicalType": "timestamp-millis"}
+  ]
+}
