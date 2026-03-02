@@ -1,5 +1,7 @@
 package com.tsengine.breachdetector.config;
 
+import com.tsengine.schema.CommentaryApproved;
+import com.tsengine.schema.CommentaryCompleted;
 import com.tsengine.schema.TradeEvent;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
@@ -28,17 +30,17 @@ public class KafkaConsumerConfig {
 
     @Bean
     public ConsumerFactory<String, TradeEvent> tradeEventConsumerFactory() {
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        configs.put(ConsumerConfig.GROUP_ID_CONFIG, "breach-detector");
-        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
-        configs.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, schemaRegistryUrl);
-        configs.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
-        configs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-        configs.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
-        configs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        return new DefaultKafkaConsumerFactory<>(configs);
+        return new DefaultKafkaConsumerFactory<>(baseConsumerConfigs("breach-detector"));
+    }
+
+    @Bean
+    public ConsumerFactory<String, CommentaryCompleted> commentaryCompletedConsumerFactory() {
+        return new DefaultKafkaConsumerFactory<>(baseConsumerConfigs("breach-detector-commentary-status"));
+    }
+
+    @Bean
+    public ConsumerFactory<String, CommentaryApproved> commentaryApprovedConsumerFactory() {
+        return new DefaultKafkaConsumerFactory<>(baseConsumerConfigs("breach-detector-commentary-status"));
     }
 
     @Bean
@@ -48,5 +50,39 @@ public class KafkaConsumerConfig {
         factory.setConsumerFactory(tradeEventConsumerFactory());
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
         return factory;
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, CommentaryCompleted>
+            commentaryCompletedKafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, CommentaryCompleted> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(commentaryCompletedConsumerFactory());
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+        return factory;
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, CommentaryApproved>
+            commentaryApprovedKafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, CommentaryApproved> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(commentaryApprovedConsumerFactory());
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+        return factory;
+    }
+
+    private Map<String, Object> baseConsumerConfigs(String groupId) {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        configs.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
+        configs.put(KafkaAvroDeserializerConfig.SCHEMA_REGISTRY_URL_CONFIG, schemaRegistryUrl);
+        configs.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
+        configs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+        configs.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+        configs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        return configs;
     }
 }

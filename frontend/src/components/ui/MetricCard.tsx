@@ -11,10 +11,10 @@ interface MetricCardProps {
 }
 
 const colorMap = {
-  primary: { text: 'text-primary', bg: 'bg-primary/10' },
-  danger: { text: 'text-danger', bg: 'bg-danger/10' },
-  warning: { text: 'text-warning', bg: 'bg-warning/10' },
-  ai: { text: 'text-ai-accent', bg: 'bg-ai-accent/10' },
+  primary: { line: 'border-t-info/30', value: 'text-text-primary' },
+  danger: { line: 'border-t-danger/30', value: 'text-text-primary' },
+  warning: { line: 'border-t-warning/30', value: 'text-text-primary' },
+  ai: { line: 'border-t-ai-accent/30', value: 'text-text-primary' },
 } as const;
 
 export function MetricCard({
@@ -27,16 +27,14 @@ export function MetricCard({
 }: MetricCardProps) {
   const palette = colorMap[color];
   return (
-    <div className="rounded-xl border border-[#2A2D35] bg-[#111318] p-5 shadow-card transition-colors duration-200 hover:border-[#3A3D45]">
+    <div className={clsx('rounded-lg border border-border-subtle border-t-2 bg-bg-surface p-5', palette.line)}>
       <div className="mb-4 flex items-start justify-between">
-        <p className="text-xs uppercase tracking-wider text-text-secondary">{title}</p>
-        <span className={clsx('rounded-lg p-2', palette.bg)}>
-          <Icon className={clsx('h-4 w-4', palette.text)} />
-        </span>
+        <p className="text-[11px] uppercase tracking-[0.12em] text-text-secondary">{title}</p>
+        <Icon className="h-4 w-4 text-text-tertiary" />
       </div>
 
-      <p className={clsx('tabular-nums font-mono text-3xl font-bold', palette.text)}>{value}</p>
-      {subtitle ? <p className="mt-1 text-xs text-text-secondary">{subtitle}</p> : null}
+      <p className={clsx('tabular-nums font-mono text-[28px] font-medium', palette.value)}>{value}</p>
+      {subtitle ? <p className="mt-1 text-[11px] text-text-secondary">{subtitle}</p> : null}
 
       {typeof trend === 'number' ? (
         <div

@@ -12,6 +12,6 @@
     {"name": "costUsd", "type": "double", "default": 0.0},
     {"name": "tokensInput", "type": "int", "default": 0},
     {"name": "tokensOutput", "type": "int", "default": 0},
-    {"name": "completedAt", "type": "long", "logicalType": "timestamp-millis"}
+    {"name": "completedAt", "type": {"type": "long", "logicalType": "timestamp-millis"}}
   ]
 }

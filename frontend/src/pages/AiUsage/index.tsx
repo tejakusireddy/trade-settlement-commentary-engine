@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { format, parseISO, subDays } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { SkeletonLoader } from '../../components/ui/SkeletonLoader';
 import { commentaryApi } from '../../services/api';
@@ -25,9 +25,9 @@ export default function AiUsagePage() {
     enabled: isAdmin,
   });
 
-  const { data: commentaryPage, isLoading: commentaryLoading, isError: commentaryError } = useQuery({
-    queryKey: ['ai-commentaries', sessionKey],
-    queryFn: () => commentaryApi.list(0, 30),
+  const { data: usageHistory, isLoading: usageLoading, isError: usageError } = useQuery({
+    queryKey: ['ai-usage-history', sessionKey],
+    queryFn: () => commentaryApi.getUsageHistory(30, 20),
     refetchInterval: 60_000,
     enabled: isAdmin,
   });
@@ -40,10 +40,11 @@ export default function AiUsagePage() {
     );
   }
 
-  const commentaries = commentaryPage?.content ?? [];
+  const usageDaily = usageHistory?.daily ?? [];
+  const recentCalls = usageHistory?.recentCalls ?? [];
   const dailyCost = costData?.dailyCostUsd ?? 0;
   const dailyCap = costData?.dailyCapUsd ?? 10;
-  const generatedCount = commentaries.length;
+  const generatedCount = usageDaily.reduce((total, day) => total + day.callCount, 0);
   const breakerStatus = String(
     (breakerData as { state?: string; status?: string; circuitBreakerStatus?: string } | undefined)
       ?.state ??
@@ -55,22 +56,14 @@ export default function AiUsagePage() {
   const usagePercent = dailyCap > 0 ? Math.min((dailyCost / dailyCap) * 100, 100) : 0;
 
   const chartData = useMemo(
-    () =>
-      Array.from({ length: 30 }).map((_, idx) => {
-        const day = subDays(new Date(), 29 - idx);
-        const dayCommentaries = commentaries.filter(
-          (commentary) => format(parseISO(commentary.createdAt), 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd'),
-        );
-        const estimated = Number(((dayCommentaries.length / Math.max(commentaries.length, 1)) * dailyCost).toFixed(2));
-        return {
-          day: format(day, 'MM/dd'),
-          cost: estimated,
-        };
-      }),
-    [commentaries, dailyCost],
+    () => usageDaily.map((day) => ({
+      day: format(parseISO(day.day), 'MM/dd'),
+      cost: Number(day.costUsd ?? 0),
+    })),
+    [usageDaily],
   );
 
-  if (costLoading || breakerLoading || commentaryLoading) {
+  if (costLoading || breakerLoading || usageLoading) {
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-3 gap-4">
@@ -83,7 +76,7 @@ export default function AiUsagePage() {
     );
   }
 
-  if (costError || breakerError || commentaryError) {
+  if (costError || breakerError || usageError) {
     return (
       <div className="rounded-lg border border-danger/30 bg-bg-surface p-6 text-sm text-danger">
         Failed to load AI usage telemetry.
@@ -103,7 +96,7 @@ export default function AiUsagePage() {
           <p className="tabular-nums mt-2 font-mono text-3xl text-text-secondary">${dailyCap.toFixed(2)}</p>
         </div>
         <div className="rounded-lg border border-border-subtle bg-bg-surface p-5">
-          <p className="text-xs uppercase tracking-wider text-text-secondary">Commentaries Generated</p>
+          <p className="text-xs uppercase tracking-wider text-text-secondary">Calls (30d)</p>
           <p className="tabular-nums mt-2 font-mono text-3xl text-text-primary">{generatedCount}</p>
         </div>
       </div>
@@ -127,8 +120,8 @@ export default function AiUsagePage() {
             />
           </div>
         </div>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="h-64 min-h-[256px] min-w-0">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
             <BarChart data={chartData}>
               <CartesianGrid stroke="#21262D" strokeDasharray="3 3" />
               <XAxis dataKey="day" tick={{ fill: '#7D8590', fontSize: 11, fontFamily: 'IBM Plex Mono' }} axisLine={false} tickLine={false} />
@@ -164,20 +157,20 @@ export default function AiUsagePage() {
         <section className="rounded-lg border border-border-subtle bg-bg-surface p-5">
           <h3 className="mb-4 text-base font-semibold text-text-primary">Recent AI Calls</h3>
           <div className="space-y-2">
-            {commentaries.slice(0, 8).map((commentary) => (
+            {recentCalls.slice(0, 8).map((call) => (
               <div
-                key={commentary.id}
+                key={call.commentaryId}
                 className="grid grid-cols-6 gap-2 rounded-lg bg-bg-base px-3 py-2 text-xs text-text-secondary"
               >
-                <span className="tabular-nums font-mono">{format(parseISO(commentary.createdAt), 'HH:mm:ss')}</span>
-                <span>claude-sonnet-4-6</span>
-                <span className="tabular-nums font-mono">--</span>
-                <span className="tabular-nums font-mono">--</span>
-                <span className="tabular-nums font-mono text-text-primary">--</span>
-                <span className="tabular-nums font-mono">--</span>
+                <span className="tabular-nums font-mono">{format(parseISO(call.createdAt), 'HH:mm:ss')}</span>
+                <span>{call.model}</span>
+                <span className="tabular-nums font-mono">{call.tokensInput}</span>
+                <span className="tabular-nums font-mono">{call.tokensOutput}</span>
+                <span className="tabular-nums font-mono text-text-primary">${Number(call.costUsd).toFixed(4)}</span>
+                <span className="tabular-nums font-mono">{call.latencyMs} ms</span>
               </div>
             ))}
-            {!commentaries.length ? (
+            {!recentCalls.length ? (
               <div className="rounded-lg bg-bg-base px-3 py-2 text-xs text-text-tertiary">
                 No AI calls recorded yet.
               </div>

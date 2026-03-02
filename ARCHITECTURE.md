@@ -77,7 +77,7 @@ Service  Service       (Claude API)
 
 ### 1. trade-ingest-service
 - **Responsibility:** Accept trade events via REST, validate, publish to Kafka
-- **Port:** 8081
+- **Port:** 8082
 - **Kafka:** Produces to `trade.events`
 - **Key patterns:** Idempotency key validation (Redis), Avro schema validation, fail-fast on bad input
 - **Endpoints:**
@@ -87,15 +87,15 @@ Service  Service       (Claude API)
 
 ### 2. breach-detector-service
 - **Responsibility:** Consume trade events, apply settlement calendar logic, detect T+2/T+3/T+5 breaches
-- **Port:** 8082
-- **Kafka:** Consumes `trade.events`, produces to `trade.breaches`
+- **Port:** 8083
+- **Kafka:** Consumes `trade.events`, `commentary.completed`, `commentary.approved`; produces to `trade.breaches`
 - **Key patterns:** Settlement calendar (weekends/holidays excluded), breach reason classification, DLQ after 3 retries
 - **Breach reasons:** `MISSING_ASSIGNMENT`, `FAILED_ALLOCATION`, `COUNTERPARTY_FAILURE`, `INSUFFICIENT_FUNDS`, `SYSTEM_ERROR`
 
 ### 3. commentary-service
 - **Responsibility:** Consume breach events, generate AI commentary via Claude API, store with full audit
-- **Port:** 8083
-- **Kafka:** Consumes `trade.breaches`, produces to `commentary.completed`
+- **Port:** 8084
+- **Kafka:** Consumes `trade.breaches`, produces to `commentary.completed` and `commentary.approved`
 - **Key patterns:**
   - Resilience4j circuit breaker around Claude API
   - Fallback to structured template commentary
@@ -117,7 +117,8 @@ Service  Service       (Claude API)
 | `trade.events` | trade-ingest-service | breach-detector-service | Raw trade ingestion |
 | `trade.breaches` | breach-detector-service | commentary-service | Detected breaches |
 | `commentary.requests` | commentary-service internal | commentary-service internal | Commentary generation queue |
-| `commentary.completed` | commentary-service | api-gateway-service | Finished commentaries |
+| `commentary.completed` | commentary-service | breach-detector-service | Commentary generated (breach workflow transition) |
+| `commentary.approved` | commentary-service | breach-detector-service | Commentary approved (breach workflow transition) |
 | `trade.dlq` | Any service | Manual consumer | Dead letter queue |
 
 **Kafka Config:**
@@ -245,6 +246,10 @@ Fallback:              Template-based commentary
 
 ### Design Language: Dark Financial Terminal
 Inspired by Bloomberg Terminal + Citadel internal dashboards. Data-dense, precise, premium.
+
+### Runtime Flow
+- Frontend calls API Gateway only (`VITE_API_BASE_URL=http://localhost:8080`).
+- Frontend must not call service ports directly in normal runtime flow.
 
 ### Color System
 ```css
@@ -401,7 +406,7 @@ KAFKA_BOOTSTRAP_SERVERS=localhost:9092
 KAFKA_SCHEMA_REGISTRY_URL=http://localhost:8081
 
 # PostgreSQL
-POSTGRES_URL=jdbc:postgresql://localhost:5432/trade_settlement
+POSTGRES_URL=jdbc:postgresql://localhost:5433/trade_settlement
 POSTGRES_USERNAME=trade_user
 POSTGRES_PASSWORD=<secret>
 
@@ -424,10 +429,13 @@ CLAUDE_MODEL=claude-sonnet-4-6
 CLAUDE_DAILY_COST_CAP_USD=10.00
 
 # Service ports
-TRADE_INGEST_PORT=8081
-BREACH_DETECTOR_PORT=8082
-COMMENTARY_PORT=8083
+TRADE_INGEST_PORT=8082
+BREACH_DETECTOR_PORT=8083
+COMMENTARY_PORT=8084
 API_GATEWAY_PORT=8080
+
+# Frontend ingress
+VITE_API_BASE_URL=http://localhost:8080
 ```
 
 ---

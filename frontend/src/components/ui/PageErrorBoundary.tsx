@@ -29,7 +29,7 @@ export class PageErrorBoundary extends Component<Props, State> {
     }
 
     return (
-      <div className="rounded-xl border border-danger/40 bg-[#111318] p-6">
+      <div className="rounded-lg border border-danger/40 bg-bg-surface p-6">
         <div className="mb-3 flex items-center gap-2 text-danger">
           <AlertTriangle className="h-4 w-4" />
           <h2 className="text-sm font-semibold">Page failed to load</h2>

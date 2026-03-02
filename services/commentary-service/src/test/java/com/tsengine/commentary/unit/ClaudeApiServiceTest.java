@@ -20,6 +20,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
+import java.time.Instant;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -105,7 +106,7 @@ class ClaudeApiServiceTest {
                 .setBreachReason("MISSING_ASSIGNMENT")
                 .setDaysOverdue(3)
                 .setTradeDate("2026-03-01")
-                .setDetectedAt(System.currentTimeMillis())
+                .setDetectedAt(Instant.now())
                 .build();
     }
 

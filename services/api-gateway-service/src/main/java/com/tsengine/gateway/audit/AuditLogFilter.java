@@ -12,7 +12,6 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -24,7 +23,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
-@RequiredArgsConstructor
 public class AuditLogFilter extends OncePerRequestFilter {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AuditLogFilter.class);
@@ -60,17 +58,23 @@ public class AuditLogFilter extends OncePerRequestFilter {
         try {
             filterChain.doFilter(request, response);
         } finally {
-            long latencyMs = (System.nanoTime() - startNs) / 1_000_000L;
-            gatewayRequestCounter.increment();
-            gatewayLatencyTimer.record(latencyMs, java.util.concurrent.TimeUnit.MILLISECONDS);
-            Map<String, Object> audit = new LinkedHashMap<>();
-            audit.put("timestamp", Instant.now().toString());
-            audit.put("userId", userId);
-            audit.put("method", request.getMethod());
-            audit.put("path", request.getRequestURI());
-            audit.put("status", response.getStatus());
-            audit.put("latencyMs", latencyMs);
-            LOGGER.info(objectMapper.writeValueAsString(audit));
+            try {
+                long latencyMs = (System.nanoTime() - startNs) / 1_000_000L;
+                gatewayRequestCounter.increment();
+                gatewayLatencyTimer.record(latencyMs, java.util.concurrent.TimeUnit.MILLISECONDS);
+                Map<String, Object> audit = new LinkedHashMap<>();
+                audit.put("timestamp", Instant.now().toString());
+                audit.put("userId", userId);
+                audit.put("method", request.getMethod());
+                audit.put("path", request.getRequestURI());
+                audit.put("status", response.getStatus());
+                audit.put("latencyMs", latencyMs);
+                LOGGER.info(objectMapper.writeValueAsString(audit));
+            } catch (Exception ex) {
+                // Never fail request lifecycle because of audit logging/metrics errors.
+                LOGGER.error("Audit logging failed method={} path={} reason={}",
+                        request.getMethod(), request.getRequestURI(), ex.getMessage(), ex);
+            }
             MDC.clear();
         }
     }

@@ -9,7 +9,10 @@ const keycloakConfig: KeycloakConfig = {
 export const keycloak = new Keycloak(keycloakConfig);
 
 let initialized = false;
+let initPromise: Promise<boolean> | null = null;
 let reauthInProgress = false;
+const SWITCH_USER_QUERY_PARAM = 'kc_action';
+const SWITCH_USER_QUERY_VALUE = 'switch-user';
 
 const clearAuthStorage = () => {
   const clearByPrefix = (storage: Storage, prefixes: string[]) => {
@@ -28,23 +31,60 @@ const clearAuthStorage = () => {
   clearByPrefix(window.sessionStorage, ['kc-', 'keycloak']);
 };
 
+const buildRedirectUri = (forcePromptLogin: boolean): string => {
+  if (!forcePromptLogin) {
+    return window.location.origin;
+  }
+  const url = new URL(window.location.origin);
+  url.searchParams.set(SWITCH_USER_QUERY_PARAM, SWITCH_USER_QUERY_VALUE);
+  return url.toString();
+};
+
+const clearLocalAuthState = () => {
+  keycloak.clearToken();
+  clearAuthStorage();
+};
+
 export const initKeycloak = async (): Promise<boolean> => {
   if (initialized) {
     return Boolean(keycloak.authenticated);
   }
-
-  try {
-    const authenticated = await keycloak.init({
-      onLoad: 'login-required',
-      pkceMethod: 'S256',
-      checkLoginIframe: false,
-    });
-    initialized = true;
-    return authenticated;
-  } catch (error) {
-    console.error('Failed to initialize Keycloak', error);
-    return false;
+  if (initPromise) {
+    return initPromise;
   }
+
+  initPromise = (async () => {
+    try {
+      const url = new URL(window.location.href);
+      const forcePromptLogin =
+        url.searchParams.get(SWITCH_USER_QUERY_PARAM) === SWITCH_USER_QUERY_VALUE;
+      if (forcePromptLogin) {
+        url.searchParams.delete(SWITCH_USER_QUERY_PARAM);
+        window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+      }
+
+      const authenticated = await keycloak.init({
+        onLoad: 'login-required',
+        pkceMethod: 'S256',
+        checkLoginIframe: false,
+        ...(forcePromptLogin ? { prompt: 'login' } : {}),
+      });
+      initialized = true;
+      return authenticated;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('can only be initialized once')) {
+        initialized = true;
+        return Boolean(keycloak.authenticated);
+      }
+      console.error('Failed to initialize Keycloak', error);
+      return false;
+    } finally {
+      initPromise = null;
+    }
+  })();
+
+  return initPromise;
 };
 
 export const login = async (): Promise<void> => {
@@ -55,25 +95,37 @@ export const loginWithPrompt = async (): Promise<void> => {
   await keycloak.login({ prompt: 'login', maxAge: 0 });
 };
 
+const performLogout = async (forcePromptLogin: boolean): Promise<void> => {
+  const redirectUri = buildRedirectUri(forcePromptLogin);
+  try {
+    await keycloak.logout({ redirectUri });
+  } finally {
+    clearLocalAuthState();
+  }
+};
+
 export const logout = async (): Promise<void> => {
-  keycloak.clearToken();
-  clearAuthStorage();
-  await keycloak.logout({ redirectUri: window.location.origin });
+  await performLogout(false);
+};
+
+export const switchUser = async (): Promise<void> => {
+  await performLogout(true);
 };
 
 export const getAccessToken = (): string | undefined => keycloak.token;
 
 export const refreshToken = async (): Promise<string | undefined> => {
+  const existingToken = keycloak.token;
   if (!keycloak.authenticated) {
-    return undefined;
+    return existingToken;
   }
   try {
     await keycloak.updateToken(30);
-    return keycloak.token;
+    return keycloak.token ?? existingToken;
   } catch (error) {
-    console.warn('Token refresh failed, clearing token', error);
-    keycloak.clearToken();
-    return undefined;
+    // Fail soft on transient refresh errors and let API 401 handling drive re-auth.
+    console.warn('Token refresh failed, continuing with current token if present', error);
+    return keycloak.token ?? existingToken;
   }
 };
 

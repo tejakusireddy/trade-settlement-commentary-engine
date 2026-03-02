@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.tsengine.commentary.application.TemplateCommentaryService;
 import com.tsengine.schema.BreachEvent;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -52,7 +53,7 @@ class TemplateCommentaryServiceTest {
                 .setBreachReason(reason)
                 .setDaysOverdue(3)
                 .setTradeDate("2026-03-01")
-                .setDetectedAt(System.currentTimeMillis())
+                .setDetectedAt(Instant.now())
                 .build();
     }
 }

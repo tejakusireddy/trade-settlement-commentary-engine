@@ -13,6 +13,6 @@
     {"name": "currency", "type": "string", "default": "USD"},
     {"name": "status", "type": "string", "default": "PENDING"},
     {"name": "idempotencyKey", "type": "string"},
-    {"name": "timestamp", "type": "long", "logicalType": "timestamp-millis"}
+    {"name": "timestamp", "type": {"type": "long", "logicalType": "timestamp-millis"}}
   ]
 }

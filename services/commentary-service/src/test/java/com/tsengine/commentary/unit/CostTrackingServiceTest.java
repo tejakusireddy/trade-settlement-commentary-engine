@@ -2,36 +2,33 @@ package com.tsengine.commentary.unit;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import com.tsengine.commentary.application.CostTrackingService;
 import com.tsengine.commentary.config.AnthropicProperties;
 import com.tsengine.commentary.infrastructure.RedisCostStore;
 import java.math.BigDecimal;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 class CostTrackingServiceTest {
 
     @Test
     void testIncrementDailyCost() {
-        RedisCostStore redisCostStore = Mockito.mock(RedisCostStore.class);
-        when(redisCostStore.incrementByFloat(any(), any())).thenReturn(new BigDecimal("1.25"));
+        FakeRedisCostStore redisCostStore = new FakeRedisCostStore();
+        redisCostStore.value = new BigDecimal("0.00");
         AnthropicProperties properties = props(new BigDecimal("10.00"));
         CostTrackingService service = new CostTrackingService(redisCostStore, properties);
 
         service.incrementDailyCost(new BigDecimal("1.25"));
 
-        verify(redisCostStore).incrementByFloat(any(), eq(new BigDecimal("1.25")));
+        assertTrue(redisCostStore.lastIncrementAmount.compareTo(new BigDecimal("1.25")) == 0);
+        assertTrue(redisCostStore.expireCalled);
     }
 
     @Test
     void testCostCapExceeded() {
-        RedisCostStore redisCostStore = Mockito.mock(RedisCostStore.class);
-        when(redisCostStore.get(any())).thenReturn(new BigDecimal("10.00"));
+        FakeRedisCostStore redisCostStore = new FakeRedisCostStore();
+        redisCostStore.value = new BigDecimal("10.00");
         CostTrackingService service = new CostTrackingService(redisCostStore, props(new BigDecimal("10.00")));
 
         assertTrue(service.isCostCapExceeded());
@@ -39,8 +36,8 @@ class CostTrackingServiceTest {
 
     @Test
     void testCostCapNotExceeded() {
-        RedisCostStore redisCostStore = Mockito.mock(RedisCostStore.class);
-        when(redisCostStore.get(any())).thenReturn(new BigDecimal("9.99"));
+        FakeRedisCostStore redisCostStore = new FakeRedisCostStore();
+        redisCostStore.value = new BigDecimal("9.99");
         CostTrackingService service = new CostTrackingService(redisCostStore, props(new BigDecimal("10.00")));
 
         assertFalse(service.isCostCapExceeded());
@@ -48,7 +45,7 @@ class CostTrackingServiceTest {
 
     @Test
     void testDailyKeyFormat() {
-        RedisCostStore redisCostStore = Mockito.mock(RedisCostStore.class);
+        FakeRedisCostStore redisCostStore = new FakeRedisCostStore();
         CostTrackingService service = new CostTrackingService(redisCostStore, props(new BigDecimal("10.00")));
 
         String key = service.dailyCostKey();
@@ -62,5 +59,32 @@ class CostTrackingServiceTest {
         properties.setModel("claude-sonnet-4-6");
         properties.setDailyCostCapUsd(cap);
         return properties;
+    }
+
+    private static final class FakeRedisCostStore extends RedisCostStore {
+        private BigDecimal value = BigDecimal.ZERO;
+        private BigDecimal lastIncrementAmount = BigDecimal.ZERO;
+        private boolean expireCalled;
+
+        private FakeRedisCostStore() {
+            super(null);
+        }
+
+        @Override
+        public BigDecimal incrementByFloat(String key, BigDecimal amount) {
+            this.lastIncrementAmount = amount;
+            this.value = this.value.add(amount);
+            return this.value;
+        }
+
+        @Override
+        public void expireIfNoTtl(String key, Duration ttl) {
+            this.expireCalled = true;
+        }
+
+        @Override
+        public BigDecimal get(String key) {
+            return this.value;
+        }
     }
 }

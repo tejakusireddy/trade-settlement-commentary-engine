@@ -11,10 +11,16 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.tsengine.common.TradeStatus;
 
 @Service
 public class TradeService {
@@ -60,7 +66,10 @@ public class TradeService {
             if (Boolean.TRUE.equals(idempotencyService.isAlreadyProcessed(request.idempotencyKey()))
                     || tradeRepository.existsByIdempotencyKey(request.idempotencyKey())) {
                 duplicateCounter.increment();
-                throw new DuplicateTradeException("Trade already processed for idempotencyKey=" + request.idempotencyKey());
+                Trade duplicate = resolveDuplicateTrade(request)
+                        .orElseThrow(() -> new DuplicateTradeException(
+                                "Trade already processed for idempotencyKey=" + request.idempotencyKey()));
+                return tradeMapper.toDto(duplicate);
             }
 
             Trade trade = tradeMapper.toEntity(request);
@@ -98,5 +107,19 @@ public class TradeService {
         Trade trade = tradeRepository.findById(id)
                 .orElseThrow(() -> new TradeNotFoundException("Trade not found for id=" + id));
         return tradeMapper.toDto(trade);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<TradeDTO> listTrades(int page, int size, TradeStatus status) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Trade> trades = status == null
+                ? tradeRepository.findAll(pageable)
+                : tradeRepository.findByStatus(status, pageable);
+        return trades.map(tradeMapper::toDto);
+    }
+
+    private Optional<Trade> resolveDuplicateTrade(TradeRequest request) {
+        return tradeRepository.findByIdempotencyKey(request.idempotencyKey())
+                .or(() -> tradeRepository.findByTradeId(request.tradeId()));
     }
 }

@@ -27,7 +27,7 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   if (loading) {
     return (
-      <div className="rounded-xl border border-[#2A2D35] bg-[#111318] p-4">
+      <div className="rounded-lg border border-border-subtle bg-bg-surface p-4">
         <div className="space-y-3">
           <SkeletonLoader variant="row" />
           <SkeletonLoader variant="row" />
@@ -39,7 +39,7 @@ export function DataTable<T>({
 
   if (!data.length) {
     return (
-      <div className="rounded-xl border border-[#2A2D35] bg-[#111318] p-10 text-center">
+      <div className="rounded-lg border border-border-subtle bg-bg-surface p-10 text-center">
         <Database className="mx-auto mb-2 h-5 w-5 text-text-tertiary" />
         <p className="text-sm text-text-secondary">{emptyMessage}</p>
       </div>
@@ -47,14 +47,14 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="w-full overflow-hidden rounded-xl border border-[#2A2D35] bg-[#111318]">
-      <div className="grid border-b border-[#2A2D35] bg-[#0A0B0D] px-4 py-3">
+    <div className="w-full overflow-hidden rounded-lg border border-border-subtle bg-bg-surface">
+      <div className="grid border-b border-border-subtle px-4 py-3">
         <div
           className="grid gap-3"
           style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}
         >
           {columns.map((column, index) => (
-            <div key={`${column.header}-${index}`} className="text-xs uppercase tracking-wider text-text-secondary">
+            <div key={`${column.header}-${index}`} className="text-[11px] uppercase tracking-[0.12em] text-text-secondary">
               {column.header}
             </div>
           ))}
@@ -66,8 +66,8 @@ export function DataTable<T>({
           <div
             key={idx}
             className={clsx(
-              'border-b border-[#1A1D24] px-4 py-3 transition-colors last:border-0',
-              onRowClick ? 'cursor-pointer hover:bg-[#1A1D24]' : '',
+              'min-h-10 border-b border-border-subtle px-4 py-2.5 transition-colors last:border-0',
+              onRowClick ? 'cursor-pointer hover:bg-bg-raised' : '',
             )}
             onClick={() => onRowClick?.(row)}
           >
@@ -78,7 +78,7 @@ export function DataTable<T>({
               {columns.map((column, colIdx) => (
                 <div
                   key={`${String(column.accessor)}-${colIdx}`}
-                  className={clsx('text-sm text-text-primary', column.className)}
+                  className={clsx('text-[13px] text-text-primary', column.className)}
                 >
                   {column.render
                     ? column.render(row)

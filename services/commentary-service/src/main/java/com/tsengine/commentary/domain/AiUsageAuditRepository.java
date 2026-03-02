@@ -12,6 +12,8 @@ public interface AiUsageAuditRepository extends JpaRepository<AiUsageAudit, UUID
 
     List<AiUsageAudit> findByCommentaryId(UUID commentaryId);
 
+    List<AiUsageAudit> findByCreatedAtGreaterThanEqualOrderByCreatedAtDesc(Instant since);
+
     @Query("select coalesce(sum(a.costUsd), 0) from AiUsageAudit a where a.createdAt >= :since")
     BigDecimal sumCostUsdByCreatedAtAfter(@Param("since") Instant since);
 }

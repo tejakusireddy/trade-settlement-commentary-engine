@@ -5,7 +5,6 @@ import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import java.util.HashMap;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.core.env.Environment;
@@ -19,7 +18,6 @@ import org.springframework.kafka.listener.ContainerProperties;
 
 @Configuration
 @EnableKafka
-@RequiredArgsConstructor
 public class KafkaConsumerConfig {
 
     private final Environment environment;

@@ -1,13 +1,13 @@
 package com.tsengine.tradeingest.unit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.tsengine.common.DuplicateTradeException;
 import com.tsengine.common.TradeDTO;
 import com.tsengine.common.TradeNotFoundException;
 import com.tsengine.common.TradeStatus;
@@ -21,14 +21,19 @@ import com.tsengine.tradeingest.domain.TradeRepository;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 class TradeServiceTest {
 
@@ -103,12 +108,13 @@ class TradeServiceTest {
         TradeDTO response = tradeService.ingestTrade(request);
 
         assertEquals("TRD-1001", response.tradeId());
+        assertEquals(UUID.nameUUIDFromBytes("TRD-1001".getBytes(StandardCharsets.UTF_8)), response.stableTradeId());
         verify(idempotencyService).markAsProcessed("idem-1001");
         verify(successCounter).increment();
     }
 
     @Test
-    void shouldThrowDuplicateTradeException() {
+    void shouldReturnExistingTradeForDuplicateIdempotencyKey() {
         TradeRequest request = new TradeRequest(
                 "TRD-2002",
                 "MSFT",
@@ -121,9 +127,29 @@ class TradeServiceTest {
                 "idem-2002"
         );
 
-        when(idempotencyService.isAlreadyProcessed("idem-2002")).thenReturn(true);
+        Trade existing = new Trade();
+        existing.setId(UUID.randomUUID());
+        existing.setTradeId(request.tradeId());
+        existing.setInstrument(request.instrument());
+        existing.setTradeDate(request.tradeDate());
+        existing.setExpectedSettlementDate(request.expectedSettlementDate());
+        existing.setCounterparty(request.counterparty());
+        existing.setQuantity(request.quantity());
+        existing.setPrice(request.price());
+        existing.setCurrency(request.currency());
+        existing.setStatus(TradeStatus.PENDING);
+        existing.setIdempotencyKey(request.idempotencyKey());
+        existing.setCreatedAt(Instant.now());
+        existing.setUpdatedAt(Instant.now());
 
-        assertThrows(DuplicateTradeException.class, () -> tradeService.ingestTrade(request));
+        when(idempotencyService.isAlreadyProcessed("idem-2002")).thenReturn(true);
+        when(tradeRepository.findByIdempotencyKey("idem-2002")).thenReturn(Optional.of(existing));
+
+        TradeDTO response = tradeService.ingestTrade(request);
+
+        assertNotNull(response);
+        assertEquals("TRD-2002", response.tradeId());
+        assertNotNull(response.stableTradeId());
         verify(duplicateCounter).increment();
     }
 
@@ -133,5 +159,59 @@ class TradeServiceTest {
         when(tradeRepository.findById(tradeId)).thenReturn(Optional.empty());
 
         assertThrows(TradeNotFoundException.class, () -> tradeService.getTrade(tradeId));
+    }
+
+    @Test
+    void shouldListTradesPagedWithoutStatusFilter() {
+        Trade trade = new Trade();
+        trade.setId(UUID.randomUUID());
+        trade.setTradeId("TRD-LIST-1");
+        trade.setInstrument("AAPL");
+        trade.setTradeDate(LocalDate.parse("2026-02-28"));
+        trade.setExpectedSettlementDate(LocalDate.parse("2026-03-03"));
+        trade.setCounterparty("CPTY-A");
+        trade.setQuantity(new BigDecimal("100.000000"));
+        trade.setPrice(new BigDecimal("150.250000"));
+        trade.setCurrency("USD");
+        trade.setStatus(TradeStatus.PENDING);
+        trade.setCreatedAt(Instant.now());
+        trade.setUpdatedAt(Instant.now());
+
+        Page<Trade> page = new PageImpl<>(List.of(trade));
+        when(tradeRepository.findAll(PageRequest.of(0, 20, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"))))
+                .thenReturn(page);
+
+        Page<TradeDTO> result = tradeService.listTrades(0, 20, null);
+
+        assertEquals(1, result.getTotalElements());
+        assertEquals("TRD-LIST-1", result.getContent().getFirst().tradeId());
+    }
+
+    @Test
+    void shouldListTradesPagedWithStatusFilter() {
+        Trade trade = new Trade();
+        trade.setId(UUID.randomUUID());
+        trade.setTradeId("TRD-LIST-2");
+        trade.setInstrument("MSFT");
+        trade.setTradeDate(LocalDate.parse("2026-02-28"));
+        trade.setExpectedSettlementDate(LocalDate.parse("2026-03-03"));
+        trade.setCounterparty("CPTY-B");
+        trade.setQuantity(new BigDecimal("50.000000"));
+        trade.setPrice(new BigDecimal("220.100000"));
+        trade.setCurrency("USD");
+        trade.setStatus(TradeStatus.BREACHED);
+        trade.setCreatedAt(Instant.now());
+        trade.setUpdatedAt(Instant.now());
+
+        Page<Trade> page = new PageImpl<>(List.of(trade));
+        when(tradeRepository.findByStatus(
+                org.mockito.ArgumentMatchers.eq(TradeStatus.BREACHED),
+                org.mockito.ArgumentMatchers.any(org.springframework.data.domain.Pageable.class))
+        ).thenReturn(page);
+
+        Page<TradeDTO> result = tradeService.listTrades(0, 20, TradeStatus.BREACHED);
+
+        assertEquals(1, result.getTotalElements());
+        assertEquals(TradeStatus.BREACHED, result.getContent().getFirst().status());
     }
 }

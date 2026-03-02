@@ -1,11 +1,11 @@
 package com.tsengine.commentary.config;
 
 import com.tsengine.schema.CommentaryCompleted;
+import com.tsengine.schema.CommentaryApproved;
 import com.tsengine.schema.DlqEvent;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import java.util.HashMap;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.context.annotation.Bean;
@@ -16,7 +16,6 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 
 @Configuration
-@RequiredArgsConstructor
 public class KafkaProducerConfig {
 
     private final Environment environment;
@@ -31,6 +30,11 @@ public class KafkaProducerConfig {
     }
 
     @Bean
+    public ProducerFactory<String, CommentaryApproved> commentaryApprovedProducerFactory() {
+        return new DefaultKafkaProducerFactory<>(producerConfigMap());
+    }
+
+    @Bean
     public ProducerFactory<String, DlqEvent> dlqProducerFactory() {
         return new DefaultKafkaProducerFactory<>(producerConfigMap());
     }
@@ -38,6 +42,11 @@ public class KafkaProducerConfig {
     @Bean
     public KafkaTemplate<String, CommentaryCompleted> commentaryCompletedKafkaTemplate() {
         return new KafkaTemplate<>(commentaryCompletedProducerFactory());
+    }
+
+    @Bean
+    public KafkaTemplate<String, CommentaryApproved> commentaryApprovedKafkaTemplate() {
+        return new KafkaTemplate<>(commentaryApprovedProducerFactory());
     }
 
     @Bean

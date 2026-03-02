@@ -178,8 +178,8 @@ export default function DashboardPage() {
             <h3 className="text-base font-semibold text-text-primary">Settlement Breach Activity</h3>
             <p className="text-xs text-text-secondary">Last 14 days</p>
           </div>
-          <div className="h-[240px]">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-[240px] min-h-[240px] min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="breachGradient" x1="0" y1="0" x2="0" y2="1">

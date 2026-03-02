@@ -1,4 +1,13 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { SkeletonLoader } from '../components/ui/SkeletonLoader';
 import { useAppStore } from '../store/appStore';
@@ -10,8 +19,8 @@ import {
   initKeycloak,
   keycloak,
   login,
-  loginWithPrompt,
   logout,
+  switchUser as switchKeycloakUser,
 } from './keycloak';
 
 interface AuthContextValue {
@@ -36,14 +45,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [username, setUsername] = useState('unknown-user');
   const [sessionKey, setSessionKey] = useState('anonymous:0');
   const [roles, setRoles] = useState<string[]>([]);
+  const previousSessionKeyRef = useRef<string | null>(null);
 
-  const clearClientState = async () => {
+  const clearClientState = useCallback(async () => {
     cancelActiveRequests();
     await queryClient.cancelQueries();
     queryClient.clear();
     resetAppState();
     resetApiAuthState();
-  };
+  }, [queryClient, resetAppState]);
 
   const syncAuthState = () => {
     setAuthenticated(Boolean(keycloak.authenticated));
@@ -72,20 +82,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUsername('unknown-user');
       setRoles([]);
       setSessionKey('anonymous:0');
+      previousSessionKeyRef.current = null;
+      void clearClientState();
     };
 
     keycloak.onAuthSuccess = onAuthChange;
     keycloak.onAuthRefreshSuccess = onAuthChange;
     keycloak.onTokenExpired = onAuthChange;
     keycloak.onAuthLogout = onAuthLogout;
-  }, []);
+  }, [clearClientState]);
 
   useEffect(() => {
     if (!authenticated) {
+      previousSessionKeyRef.current = null;
       return;
     }
-    void clearClientState();
-  }, [sessionKey]);
+    if (previousSessionKeyRef.current === null) {
+      previousSessionKeyRef.current = sessionKey;
+      return;
+    }
+    if (previousSessionKeyRef.current !== sessionKey) {
+      previousSessionKeyRef.current = sessionKey;
+      void clearClientState();
+      return;
+    }
+    previousSessionKeyRef.current = sessionKey;
+  }, [authenticated, clearClientState, sessionKey]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -102,10 +124,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       switchUser: async () => {
         await clearClientState();
-        await loginWithPrompt();
+        await switchKeycloakUser();
       },
     }),
-    [authenticated, roles, sessionKey, username],
+    [authenticated, clearClientState, roles, sessionKey, username],
   );
 
   if (loading) {

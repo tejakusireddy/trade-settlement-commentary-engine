@@ -2,6 +2,7 @@ package com.tsengine.breachdetector.domain.detector;
 
 import com.tsengine.breachdetector.domain.Breach;
 import com.tsengine.breachdetector.domain.BreachRepository;
+import com.tsengine.breachdetector.domain.BreachStatuses;
 import com.tsengine.breachdetector.domain.calendar.SettlementCalendar;
 import com.tsengine.common.BreachReason;
 import com.tsengine.common.BreachType;
@@ -56,7 +57,7 @@ public class BreachDetector implements BreachDetectionEngine {
         breach.setBreachType(breachType);
         breach.setBreachReason(classifyBreachReason(event));
         breach.setDaysOverdue(daysOverdue);
-        breach.setStatus("PENDING_COMMENTARY");
+        breach.setStatus(BreachStatuses.PENDING_COMMENTARY);
         return Optional.of(breach);
     }
 

@@ -9,6 +9,7 @@ TOPICS=(
   "trade.breaches"
   "commentary.requests"
   "commentary.completed"
+  "commentary.approved"
   "trade.dlq"
 )
 

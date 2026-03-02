@@ -5,7 +5,6 @@ import com.tsengine.commentary.config.KafkaTopicsProperties;
 import com.tsengine.schema.BreachEvent;
 import com.tsengine.schema.DlqEvent;
 import java.time.Instant;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -16,7 +15,6 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
 @Component
-@RequiredArgsConstructor
 public class KafkaBreachConsumer {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(KafkaBreachConsumer.class);
@@ -82,7 +80,7 @@ public class KafkaBreachConsumer {
                     .setErrorMessage(lastFailure == null ? "Unknown error" : lastFailure.getMessage())
                     .setErrorClass(lastFailure == null ? "UnknownException" : lastFailure.getClass().getName())
                     .setRetryCount(MAX_RETRIES)
-                    .setFailedAt(Instant.now().toEpochMilli())
+                    .setFailedAt(Instant.now())
                     .build();
             commentaryDlqKafkaTemplate.send(topicsProperties.getDlq(), event.getTradeId(), dlqEvent);
         } catch (Exception ex) {

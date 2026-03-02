@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { breachApi, commentaryApi } from '../../services/api';
+import type { Breach } from '../../types';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { SkeletonLoader } from '../../components/ui/SkeletonLoader';
 import { useAuth } from '../../auth/AuthContext';
@@ -48,6 +49,12 @@ export default function BreachesPage() {
     mutationFn: () => commentaryApi.approve(commentary?.id as string, username),
     onSuccess: () => {
       toast.success('Commentary approved');
+      queryClient.setQueryData<Breach[]>(['breaches', sessionKey], (current = []) =>
+        current.map((breach) =>
+          breach.id === selectedBreachId ? { ...breach, status: 'COMMENTARY_APPROVED' } : breach,
+        ),
+      );
+      void queryClient.invalidateQueries({ queryKey: ['breaches', sessionKey] });
       void queryClient.invalidateQueries({ queryKey: ['commentary', sessionKey, selectedBreachId] });
       void queryClient.invalidateQueries({ queryKey: ['commentaries', sessionKey] });
     },

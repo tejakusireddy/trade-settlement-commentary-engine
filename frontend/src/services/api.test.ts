@@ -54,4 +54,29 @@ describe('api auth session behavior', () => {
 
     expect(triggerReauthentication).toHaveBeenCalledTimes(1);
   });
+
+  it('retries once on 401 when a refreshed token becomes available', async () => {
+    vi.mocked(refreshToken)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce('token-after-refresh');
+    vi.mocked(triggerReauthentication).mockResolvedValue();
+
+    const seenAuthHeaders: string[] = [];
+    mock.onGet('/api/v1/trades').replyOnce(401, {
+      success: false,
+      message: 'Unauthorized',
+      data: null,
+      timestamp: new Date().toISOString(),
+    });
+    mock.onGet('/api/v1/trades').reply((config) => {
+      seenAuthHeaders.push(String(config.headers?.Authorization ?? ''));
+      return [200, { success: true, data: [], message: 'ok', timestamp: new Date().toISOString() }];
+    });
+
+    const trades = await tradeApi.list();
+
+    expect(trades).toEqual([]);
+    expect(seenAuthHeaders).toContain('Bearer token-after-refresh');
+    expect(triggerReauthentication).not.toHaveBeenCalled();
+  });
 });

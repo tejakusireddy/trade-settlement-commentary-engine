@@ -7,8 +7,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.UUID;
 import java.util.Objects;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -23,7 +23,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
-@RequiredArgsConstructor
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RateLimitFilter.class);
@@ -56,16 +55,36 @@ public class RateLimitFilter extends OncePerRequestFilter {
         String key = "rate_limit:" + userId + ":" + endpointPrefix;
 
         long now = System.currentTimeMillis();
-        long windowSeconds = Long.parseLong(environment.getProperty("rate-limit.window-seconds", "60"));
+        long windowSeconds = readLongProperty("rate-limit.window-seconds", 60L);
         long windowMs = windowSeconds * 1000L;
-        long maxPerWindow = Long.parseLong(environment.getProperty("rate-limit.requests-per-minute", "100"));
+        long maxPerWindow = readLongProperty("rate-limit.requests-per-minute", 100L);
 
-        ZSetOperations<String, String> zSet = redisTemplate.opsForZSet();
-        String scoreMember = String.valueOf(now);
-        zSet.add(key, scoreMember, now); // ZADD
-        zSet.removeRangeByScore(key, 0, now - windowMs); // ZREMRANGEBYSCORE
-        Long count = zSet.zCard(key); // ZCARD
-        redisTemplate.expire(key, Duration.ofSeconds(windowSeconds)); // EXPIRE
+        Long count = null;
+        try {
+            ZSetOperations<String, String> zSet = redisTemplate.opsForZSet();
+            if (zSet == null) {
+                LOGGER.error("Rate limiter unavailable: Redis ZSet operations bean is null; failing open endpoint={}",
+                        endpointPrefix);
+                filterChain.doFilter(request, response);
+                return;
+            }
+            // Ensure uniqueness under high concurrency; duplicated members under the same millisecond
+            // make counts appear lower than real traffic.
+            String scoreMember = now + "-" + UUID.randomUUID();
+            zSet.add(key, scoreMember, now); // ZADD
+            zSet.removeRangeByScore(key, 0, now - windowMs); // ZREMRANGEBYSCORE
+            count = zSet.zCard(key); // ZCARD
+            redisTemplate.expire(key, Duration.ofSeconds(windowSeconds)); // EXPIRE
+        } catch (RuntimeException ex) {
+            LOGGER.error(
+                    "Rate limiter failed open userId={} endpoint={} reason={}",
+                    userId,
+                    endpointPrefix,
+                    ex.getMessage()
+            );
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         if (count != null && count > maxPerWindow) {
             gatewayRateLimitCounter.increment();
@@ -73,11 +92,29 @@ public class RateLimitFilter extends OncePerRequestFilter {
             response.setStatus(429);
             response.setHeader("Retry-After", String.valueOf(windowSeconds));
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            response.getWriter().write("{\"success\":false,\"data\":null,\"message\":\"Rate limit exceeded\"}");
+            try {
+                response.getWriter().write("{\"success\":false,\"data\":null,\"message\":\"Rate limit exceeded\"}");
+            } catch (IOException ioEx) {
+                // Client may disconnect while server is writing the rate-limit payload.
+                LOGGER.warn("Rate limit response write failed endpoint={} reason={}", endpointPrefix, ioEx.getMessage());
+            }
             return;
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private long readLongProperty(String key, long defaultValue) {
+        String raw = environment.getProperty(key);
+        if (raw == null || raw.isBlank()) {
+            return defaultValue;
+        }
+        try {
+            return Long.parseLong(raw.trim());
+        } catch (NumberFormatException ex) {
+            LOGGER.warn("Invalid rate-limit config {}='{}'; using default={}", key, raw, defaultValue);
+            return defaultValue;
+        }
     }
 
     private String extractUserId() {

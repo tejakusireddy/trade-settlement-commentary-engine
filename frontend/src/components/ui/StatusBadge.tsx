@@ -6,18 +6,21 @@ interface StatusBadgeProps {
 }
 
 const styles: Record<string, string> = {
-  PENDING: 'bg-warning/10 text-warning border border-warning/20',
-  SETTLED: 'bg-primary/10 text-primary border border-primary/20',
-  BREACHED: 'bg-danger/10 text-danger border border-danger/20',
-  FAILED: 'bg-danger/10 text-danger border border-danger/20',
-  T2: 'bg-info/10 text-info border border-info/20',
-  T3: 'bg-warning/10 text-warning border border-warning/20',
-  T5: 'bg-danger/10 text-danger border border-danger/20',
-  AI: 'bg-ai-accent/10 text-ai-accent border border-ai-accent/20',
-  TEMPLATE: 'bg-[#2A2D35] text-text-secondary border border-[#2A2D35]',
-  CLOSED: 'bg-primary/10 text-primary border border-primary/20',
-  OPEN: 'bg-danger/10 text-danger border border-danger/20',
-  HALF_OPEN: 'bg-warning/10 text-warning border border-warning/20',
+  PENDING: 'bg-[#D29922]/15 text-[#D29922]',
+  SETTLED: 'bg-[#3FB950]/15 text-[#3FB950]',
+  BREACHED: 'bg-[#F85149]/15 text-[#F85149]',
+  FAILED: 'bg-[#F85149]/15 text-[#F85149]',
+  T2: 'bg-[#388BFD]/15 text-[#388BFD]',
+  T3: 'bg-[#D29922]/15 text-[#D29922]',
+  T5: 'bg-[#F85149]/15 text-[#F85149]',
+  PENDING_COMMENTARY: 'bg-[#D29922]/15 text-[#D29922]',
+  COMMENTARY_GENERATED: 'bg-[#388BFD]/15 text-[#388BFD]',
+  COMMENTARY_APPROVED: 'bg-[#3FB950]/15 text-[#3FB950]',
+  AI: 'bg-[#BC8CFF]/15 text-[#BC8CFF]',
+  TEMPLATE: 'bg-[#7D8590]/15 text-[#7D8590]',
+  CLOSED: 'bg-[#3FB950]/15 text-[#3FB950]',
+  OPEN: 'bg-[#F85149]/15 text-[#F85149]',
+  HALF_OPEN: 'bg-[#D29922]/15 text-[#D29922]',
 };
 
 export function StatusBadge({ status, size = 'md' }: StatusBadgeProps) {
@@ -26,8 +29,8 @@ export function StatusBadge({ status, size = 'md' }: StatusBadgeProps) {
     <span
       className={clsx(
         'inline-flex items-center rounded-full font-medium',
-        size === 'sm' ? 'px-2 py-0.5 text-[10px]' : 'px-2 py-0.5 text-xs',
-        styles[normalized] ?? 'bg-[#2A2D35] text-text-secondary border border-[#2A2D35]',
+        size === 'sm' ? 'px-1.5 py-0.5 text-[10px]' : 'px-1.5 py-0.5 text-[11px]',
+        styles[normalized] ?? 'bg-[#7D8590]/15 text-[#7D8590]',
       )}
     >
       {normalized}

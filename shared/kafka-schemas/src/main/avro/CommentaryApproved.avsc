@@ -1,0 +1,12 @@
+{
+  "type": "record",
+  "name": "CommentaryApproved",
+  "namespace": "com.tsengine.schema",
+  "fields": [
+    {"name": "commentaryId", "type": "string"},
+    {"name": "breachId", "type": "string"},
+    {"name": "tradeId", "type": "string"},
+    {"name": "approvedBy", "type": "string"},
+    {"name": "approvedAt", "type": {"type": "long", "logicalType": "timestamp-millis"}}
+  ]
+}

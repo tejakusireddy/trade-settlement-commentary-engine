@@ -2,6 +2,7 @@ package com.tsengine.commentary.api;
 
 import com.tsengine.commentary.application.CommentaryManagementService;
 import com.tsengine.commentary.application.CostTrackingService;
+import com.tsengine.commentary.application.AiUsageQueryService;
 import com.tsengine.commentary.domain.Commentary;
 import com.tsengine.common.ApiResponse;
 import com.tsengine.common.CommentaryDTO;
@@ -28,17 +29,20 @@ public class CommentaryController {
     private final CommentaryManagementService commentaryManagementService;
     private final CommentaryMapper commentaryMapper;
     private final CostTrackingService costTrackingService;
+    private final AiUsageQueryService aiUsageQueryService;
     private final CircuitBreakerRegistry circuitBreakerRegistry;
 
     public CommentaryController(
             CommentaryManagementService commentaryManagementService,
             CommentaryMapper commentaryMapper,
             CostTrackingService costTrackingService,
+            AiUsageQueryService aiUsageQueryService,
             CircuitBreakerRegistry circuitBreakerRegistry
     ) {
         this.commentaryManagementService = commentaryManagementService;
         this.commentaryMapper = commentaryMapper;
         this.costTrackingService = costTrackingService;
+        this.aiUsageQueryService = aiUsageQueryService;
         this.circuitBreakerRegistry = circuitBreakerRegistry;
     }
 
@@ -75,13 +79,20 @@ public class CommentaryController {
     }
 
     @GetMapping("/ai/cost/today")
-    public ApiResponse<Map<String, Object>> getDailyCost() {
+    public ApiResponse<AiCostSummaryResponse> getDailyCost() {
         BigDecimal cost = costTrackingService.getDailyCost();
         BigDecimal cap = costTrackingService.getDailyCostCap();
-        return ApiResponse.success(Map.of(
-                "dailyCost", cost,
-                "dailyCap", cap,
-                "capExceeded", costTrackingService.isCostCapExceeded()
+        CircuitBreaker breaker = circuitBreakerRegistry.circuitBreaker("claude-api");
+        double percentUsed = cap.compareTo(BigDecimal.ZERO) == 0
+                ? 0D
+                : cost.multiply(BigDecimal.valueOf(100))
+                        .divide(cap, 2, java.math.RoundingMode.HALF_UP)
+                        .doubleValue();
+        return ApiResponse.success(new AiCostSummaryResponse(
+                cost,
+                cap,
+                percentUsed,
+                breaker.getState().name()
         ));
     }
 
@@ -94,5 +105,13 @@ public class CommentaryController {
                 "failureRate", breaker.getMetrics().getFailureRate(),
                 "bufferedCalls", breaker.getMetrics().getNumberOfBufferedCalls()
         ));
+    }
+
+    @GetMapping("/ai/usage/history")
+    public ApiResponse<AiUsageHistoryResponse> getUsageHistory(
+            @RequestParam(defaultValue = "30") int days,
+            @RequestParam(defaultValue = "20") int recentLimit
+    ) {
+        return ApiResponse.success(aiUsageQueryService.getUsageHistory(days, recentLimit));
     }
 }

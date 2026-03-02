@@ -84,7 +84,7 @@ public class KafkaTradeConsumer {
                     .setErrorMessage(ex == null ? "Unknown error" : ex.getMessage())
                     .setErrorClass(ex == null ? "UnknownException" : ex.getClass().getName())
                     .setRetryCount(retryCount)
-                    .setFailedAt(Instant.now().toEpochMilli())
+                    .setFailedAt(Instant.now())
                     .build();
             dlqKafkaTemplate.send(dlqTopic, event.getTradeId(), dlqEvent);
             eventsSentToDlqCounter.increment();

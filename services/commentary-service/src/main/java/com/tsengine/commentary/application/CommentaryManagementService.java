@@ -3,22 +3,30 @@ package com.tsengine.commentary.application;
 import com.tsengine.commentary.domain.Commentary;
 import com.tsengine.commentary.exception.CommentaryNotFoundException;
 import com.tsengine.commentary.infrastructure.CommentaryJpaRepository;
+import com.tsengine.commentary.infrastructure.KafkaCommentaryProducer;
 import java.time.Instant;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@RequiredArgsConstructor
 public class CommentaryManagementService {
 
-    private final CommentaryJpaRepository commentaryJpaRepository;
+    private static final Logger LOGGER = LoggerFactory.getLogger(CommentaryManagementService.class);
 
-    public CommentaryManagementService(CommentaryJpaRepository commentaryJpaRepository) {
+    private final CommentaryJpaRepository commentaryJpaRepository;
+    private final KafkaCommentaryProducer kafkaCommentaryProducer;
+
+    public CommentaryManagementService(
+            CommentaryJpaRepository commentaryJpaRepository,
+            KafkaCommentaryProducer kafkaCommentaryProducer
+    ) {
         this.commentaryJpaRepository = commentaryJpaRepository;
+        this.kafkaCommentaryProducer = kafkaCommentaryProducer;
     }
 
     @Transactional(readOnly = true)
@@ -43,6 +51,12 @@ public class CommentaryManagementService {
         Commentary commentary = getById(commentaryId);
         commentary.setApprovedBy(approvedBy);
         commentary.setApprovedAt(Instant.now());
-        return commentaryJpaRepository.save(commentary);
+        Commentary saved = commentaryJpaRepository.save(commentary);
+        try {
+            kafkaCommentaryProducer.publishCommentaryApproved(saved);
+        } catch (RuntimeException ex) {
+            LOGGER.error("Failed to publish commentary.approved event commentaryId={}", commentaryId, ex);
+        }
+        return saved;
     }
 }

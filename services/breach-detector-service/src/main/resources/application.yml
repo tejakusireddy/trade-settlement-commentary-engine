@@ -16,7 +16,7 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
-    ignore-migration-patterns: "*:Missing"
+    ignore-migration-patterns: "*:future,*:missing"
     out-of-order: false
     baseline-on-migrate: false
   kafka:
@@ -35,6 +35,8 @@ app:
     topics:
       trade-events: trade.events
       trade-breaches: trade.breaches
+      commentary-completed: commentary.completed
+      commentary-approved: commentary.approved
       trade-dlq: trade.dlq
 
 management:

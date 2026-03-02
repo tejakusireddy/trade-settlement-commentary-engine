@@ -1,6 +1,7 @@
 import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import type {
   AiCostSummary,
+  AiUsageHistory,
   ApiResponse,
   Breach,
   Commentary,
@@ -46,6 +47,13 @@ const startReauthOnce = async () => {
   await reauthPromise;
 };
 
+const setAuthorizationHeader = (config: RequestConfigWithMeta, token: string) => {
+  if (!config.headers) {
+    config.headers = {} as never;
+  }
+  (config.headers as Record<string, string>).Authorization = `Bearer ${token}`;
+};
+
 const attachAuthInterceptor = (client: AxiosInstance) => {
   client.interceptors.request.use(async (config: RequestConfigWithMeta) => {
     const token = await refreshToken();
@@ -57,11 +65,8 @@ const attachAuthInterceptor = (client: AxiosInstance) => {
     config.signal = controller.signal;
 
     if (token) {
-      if (!config.headers) {
-        config.headers = {} as never;
-      }
-      (config.headers as Record<string, string>).Authorization = `Bearer ${token}`;
-    } else if (config.headers && 'Authorization' in config.headers) {
+      setAuthorizationHeader(config, token);
+    } else if (!config._retryAuthHandled && config.headers && 'Authorization' in config.headers) {
       delete (config.headers as Record<string, string>).Authorization;
     }
     return config;
@@ -93,6 +98,10 @@ const unwrapClient = (name: string, client: AxiosInstance) => {
       return payload as unknown;
     },
     async (error: AxiosError<{ message?: string; success?: boolean }>) => {
+      if (error.code === 'ERR_CANCELED') {
+        return Promise.reject(error);
+      }
+
       const config = (error.config ?? {}) as RequestConfigWithMeta;
       const requestId = config.metadata?.requestId;
       if (requestId) {
@@ -101,7 +110,17 @@ const unwrapClient = (name: string, client: AxiosInstance) => {
 
       if (error.response?.status === 401 && !config._retryAuthHandled) {
         config._retryAuthHandled = true;
+        const recoveredToken = await refreshToken();
+        if (recoveredToken) {
+          setAuthorizationHeader(config, recoveredToken);
+          return client.request(config);
+        }
         await startReauthOnce();
+        const postReauthToken = await refreshToken();
+        if (postReauthToken) {
+          setAuthorizationHeader(config, postReauthToken);
+          return client.request(config);
+        }
       }
 
       const envelopeMessage =
@@ -161,6 +180,11 @@ export const commentaryApi = {
     }),
   getDailyCost: () =>
     getUnwrapped<AiCostSummary>(gatewayClient, '/api/v1/ai/cost/today'),
+  getUsageHistory: (days = 30, recentLimit = 20) =>
+    getUnwrapped<AiUsageHistory>(
+      gatewayClient,
+      `/api/v1/ai/usage/history?days=${days}&recentLimit=${recentLimit}`,
+    ),
   getCircuitBreaker: () =>
     getUnwrapped<Record<string, unknown>>(gatewayClient, '/api/v1/ai/circuit-breaker'),
 };

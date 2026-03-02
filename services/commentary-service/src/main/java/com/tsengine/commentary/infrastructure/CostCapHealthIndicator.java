@@ -2,13 +2,11 @@ package com.tsengine.commentary.infrastructure;
 
 import com.tsengine.commentary.application.CostTrackingService;
 import java.math.BigDecimal;
-import lombok.RequiredArgsConstructor;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.stereotype.Component;
 
 @Component
-@RequiredArgsConstructor
 public class CostCapHealthIndicator implements HealthIndicator {
 
     private final CostTrackingService costTrackingService;

@@ -14,6 +14,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -37,9 +38,9 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
+import org.testcontainers.lifecycle.Startables;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -49,18 +50,20 @@ class TradeIngestIntegrationTest {
 
     private static final String TOPIC = "trade.events";
 
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16")
+    static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16")
             .withDatabaseName("trade_settlement")
             .withUsername("trade_user")
             .withPassword("trade_pass");
 
-    @Container
-    static KafkaContainer kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.5.0"));
+    static final KafkaContainer kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.5.0"));
 
-    @Container
-    static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
+    static final GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
             .withExposedPorts(6379);
+
+    static {
+        // Start once up-front so DynamicPropertySource can safely read mapped ports.
+        Startables.deepStart(Stream.of(postgres, kafka, redis)).join();
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -116,11 +119,11 @@ class TradeIngestIntegrationTest {
                 .andExpect(jsonPath("$.data.tradeId").value("TRD-IT-1"));
 
         assertThat(tradeRepository.findByTradeId("TRD-IT-1")).isPresent();
-        assertThat(readPublishedEventKey()).isEqualTo("TRD-IT-1");
+        assertThat(readPublishedEventKey("TRD-IT-1")).isEqualTo("TRD-IT-1");
     }
 
     @Test
-    void shouldReturnConflictForDuplicateIdempotencyKey() throws Exception {
+    void shouldSilentlyAcknowledgeDuplicateIdempotencyKey() throws Exception {
         String payload = """
                 {
                   "tradeId":"TRD-IT-2",
@@ -143,7 +146,8 @@ class TradeIngestIntegrationTest {
         mockMvc.perform(post("/api/v1/trades")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload))
-                .andExpect(status().isConflict());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
     }
 
     @Test
@@ -177,7 +181,7 @@ class TradeIngestIntegrationTest {
                 .andExpect(jsonPath("$.data.tradeId").value("TRD-IT-3"));
     }
 
-    private String readPublishedEventKey() {
+    private String readPublishedEventKey(String expectedKey) {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "trade-ingest-it-" + System.nanoTime());
@@ -191,7 +195,9 @@ class TradeIngestIntegrationTest {
             while (System.currentTimeMillis() < deadline) {
                 ConsumerRecords<String, byte[]> records = consumer.poll(Duration.ofMillis(500));
                 for (ConsumerRecord<String, byte[]> record : records) {
-                    return record.key();
+                    if (expectedKey.equals(record.key())) {
+                        return record.key();
+                    }
                 }
             }
         }

@@ -12,6 +12,6 @@
     {"name": "breachReason", "type": "string"},
     {"name": "daysOverdue", "type": "int"},
     {"name": "tradeDate", "type": "string"},
-    {"name": "requestedAt", "type": "long", "logicalType": "timestamp-millis"}
+    {"name": "requestedAt", "type": {"type": "long", "logicalType": "timestamp-millis"}}
   ]
 }

@@ -3,7 +3,6 @@ package com.tsengine.gateway.routing;
 import com.tsengine.gateway.config.ServiceUrlsProperties;
 import com.tsengine.gateway.infrastructure.DownstreamHttpClient;
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -13,7 +12,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/trades")
-@RequiredArgsConstructor
 public class TradeRoutingController {
 
     private final DownstreamHttpClient downstreamHttpClient;

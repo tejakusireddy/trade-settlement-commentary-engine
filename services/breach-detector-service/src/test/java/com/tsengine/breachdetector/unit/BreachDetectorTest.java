@@ -80,7 +80,7 @@ class BreachDetectorTest {
                 .setCurrency("USD")
                 .setStatus("PENDING")
                 .setIdempotencyKey(UUID.randomUUID().toString())
-                .setTimestamp(System.currentTimeMillis())
+                .setTimestamp(Instant.now())
                 .build();
     }
 }

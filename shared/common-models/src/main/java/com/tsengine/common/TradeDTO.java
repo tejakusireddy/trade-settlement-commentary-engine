@@ -10,6 +10,7 @@ import java.util.UUID;
  *
  * @param id unique internal trade identifier
  * @param tradeId external business trade identifier
+ * @param stableTradeId canonical UUID-form trade identifier used by downstream services
  * @param instrument traded instrument symbol or code
  * @param tradeDate date on which the trade was executed
  * @param expectedSettlementDate expected settlement deadline date
@@ -24,6 +25,7 @@ import java.util.UUID;
 public record TradeDTO(
         UUID id,
         String tradeId,
+        UUID stableTradeId,
         String instrument,
         LocalDate tradeDate,
         LocalDate expectedSettlementDate,

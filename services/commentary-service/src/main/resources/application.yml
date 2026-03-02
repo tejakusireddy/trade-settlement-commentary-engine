@@ -37,6 +37,7 @@ app:
     topics:
       breaches: trade.breaches
       completed: commentary.completed
+      approved: commentary.approved
       dlq: trade.dlq
 
 anthropic:

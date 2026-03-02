@@ -14,6 +14,7 @@ import com.tsengine.common.BreachType;
 import com.tsengine.schema.TradeEvent;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Timer;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -99,7 +100,7 @@ class BreachDetectionServiceTest {
                 .setCurrency("USD")
                 .setStatus("PENDING")
                 .setIdempotencyKey(UUID.randomUUID().toString())
-                .setTimestamp(System.currentTimeMillis())
+                .setTimestamp(Instant.now())
                 .build();
     }
 }

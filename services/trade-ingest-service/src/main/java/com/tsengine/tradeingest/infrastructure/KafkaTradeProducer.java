@@ -3,6 +3,7 @@ package com.tsengine.tradeingest.infrastructure;
 import com.tsengine.schema.TradeEvent;
 import com.tsengine.tradeingest.application.TradeEventPublisher;
 import com.tsengine.tradeingest.domain.Trade;
+import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,7 +37,7 @@ public class KafkaTradeProducer implements TradeEventPublisher {
                 .setCurrency(trade.getCurrency())
                 .setStatus(trade.getStatus().name())
                 .setIdempotencyKey(trade.getIdempotencyKey())
-                .setTimestamp(System.currentTimeMillis())
+                .setTimestamp(Instant.now())
                 .build();
 
         try {

@@ -3,7 +3,6 @@ package com.tsengine.gateway.routing;
 import com.tsengine.gateway.config.ServiceUrlsProperties;
 import com.tsengine.gateway.infrastructure.DownstreamHttpClient;
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -12,7 +11,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequiredArgsConstructor
 @RequestMapping("/api/v1")
 public class CommentaryRoutingController {
 
@@ -51,6 +49,11 @@ public class CommentaryRoutingController {
 
     @GetMapping("/ai/circuit-breaker")
     public ResponseEntity<String> getCircuitBreaker(HttpServletRequest request) {
+        return downstreamHttpClient.forward(request, serviceUrls.getCommentaryUrl() + request.getRequestURI());
+    }
+
+    @GetMapping("/ai/usage/history")
+    public ResponseEntity<String> getAiUsageHistory(HttpServletRequest request) {
         return downstreamHttpClient.forward(request, serviceUrls.getCommentaryUrl() + request.getRequestURI());
     }
 }

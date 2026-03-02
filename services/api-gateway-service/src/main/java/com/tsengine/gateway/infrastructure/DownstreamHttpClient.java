@@ -10,8 +10,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Collections;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -20,11 +21,24 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 
 @Component
-@RequiredArgsConstructor
 public class DownstreamHttpClient {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DownstreamHttpClient.class);
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
+    private static final Set<String> RESTRICTED_HEADERS = Set.of(
+            "connection",
+            "content-length",
+            "expect",
+            "host",
+            "upgrade",
+            "keep-alive",
+            "proxy-authenticate",
+            "proxy-authorization",
+            "proxy-connection",
+            "te",
+            "trailer",
+            "transfer-encoding"
+    );
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -80,13 +94,28 @@ public class DownstreamHttpClient {
 
     private void copyHeaders(HttpServletRequest request, HttpRequest.Builder builder, String requestId) {
         Collections.list(request.getHeaderNames()).forEach(header -> {
-            if (!"host".equalsIgnoreCase(header)) {
-                Collections.list(request.getHeaders(header)).forEach(value -> builder.header(header, value));
+            if (isRestrictedHeader(header)) {
+                return;
             }
+            Collections.list(request.getHeaders(header)).forEach(value -> {
+                try {
+                    builder.header(header, value);
+                } catch (IllegalArgumentException ex) {
+                    // Fail open for non-forwardable headers instead of failing the whole request.
+                    LOGGER.warn("Skipping non-forwardable header name={} reason={}", header, ex.getMessage());
+                }
+            });
         });
         String clientIp = request.getRemoteAddr();
         builder.header("X-Forwarded-For", clientIp);
         builder.header("X-Request-ID", requestId);
+    }
+
+    private boolean isRestrictedHeader(String headerName) {
+        if (headerName == null) {
+            return true;
+        }
+        return RESTRICTED_HEADERS.contains(headerName.toLowerCase(Locale.ROOT));
     }
 
     private void applyMethodAndBody(HttpServletRequest request, HttpRequest.Builder builder) throws IOException {

@@ -9,6 +9,7 @@ public class KafkaTopicsProperties {
 
     private String breaches = "trade.breaches";
     private String completed = "commentary.completed";
+    private String approved = "commentary.approved";
     private String dlq = "trade.dlq";
 
     public String getBreaches() {
@@ -33,5 +34,13 @@ public class KafkaTopicsProperties {
 
     public void setDlq(String dlq) {
         this.dlq = dlq;
+    }
+
+    public String getApproved() {
+        return approved;
+    }
+
+    public void setApproved(String approved) {
+        this.approved = approved;
     }
 }

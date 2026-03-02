@@ -1,11 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 body {
-  background-color: #0A0B0D;
-  color: #F0F2F5;
+  background-color: #080A0F;
+  color: #E6EDF3;
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -15,17 +15,36 @@ body {
   width: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #111318;
+  background: #0D1117;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2A2D35;
+  background: #21262D;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #4A5060;
+  background: #484F58;
 }
 
 /* Monospace numbers */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-area {
+    display: block !important;
+    border: none !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+  }
 }

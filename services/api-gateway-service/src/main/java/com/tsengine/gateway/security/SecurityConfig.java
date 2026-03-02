@@ -5,7 +5,6 @@ import com.tsengine.common.ApiResponse;
 import com.tsengine.gateway.audit.AuditLogFilter;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -22,7 +21,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 @EnableWebSecurity
-@RequiredArgsConstructor
 public class SecurityConfig {
 
     private final JwtRoleConverter jwtRoleConverter;
@@ -77,7 +75,7 @@ public class SecurityConfig {
                         .hasAnyRole("ops-user", "compliance-officer", "admin")
                         .requestMatchers(HttpMethod.GET, "/api/v1/commentaries/**")
                         .hasAnyRole("ops-user", "compliance-officer", "admin")
-                        .requestMatchers(HttpMethod.POST, "/api/v1/commentaries/**/approve")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/commentaries/{id}/approve")
                         .hasAnyRole("compliance-officer", "admin")
                         .requestMatchers(HttpMethod.GET, "/api/v1/ai/**").hasRole("admin")
                         .anyRequest().authenticated()

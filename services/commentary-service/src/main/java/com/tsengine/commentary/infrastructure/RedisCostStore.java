@@ -3,13 +3,11 @@ package com.tsengine.commentary.infrastructure;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
-@RequiredArgsConstructor
 public class RedisCostStore {
 
     private final StringRedisTemplate redisTemplate;

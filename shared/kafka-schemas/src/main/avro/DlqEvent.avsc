@@ -8,6 +8,6 @@
     {"name": "errorMessage", "type": "string"},
     {"name": "errorClass", "type": "string"},
     {"name": "retryCount", "type": "int"},
-    {"name": "failedAt", "type": "long", "logicalType": "timestamp-millis"}
+    {"name": "failedAt", "type": {"type": "long", "logicalType": "timestamp-millis"}}
   ]
 }

@@ -38,7 +38,7 @@ public class KafkaBreachProducer implements BreachEventPublisher {
                 .setBreachReason(breach.getBreachReason().name())
                 .setDaysOverdue(breach.getDaysOverdue())
                 .setTradeDate(originalEvent.getTradeDate())
-                .setDetectedAt(breach.getDetectedAt().toEpochMilli())
+                .setDetectedAt(breach.getDetectedAt())
                 .build();
 
         try {

@@ -82,7 +82,9 @@ export default function TradesPage() {
       selectedTrade
         ? breaches.filter(
             (breach) =>
-              breach.tradeId === selectedTrade.tradeId || breach.tradeId === selectedTrade.id,
+              breach.tradeId === selectedTrade.stableTradeId ||
+              breach.tradeId === selectedTrade.tradeId ||
+              breach.tradeId === selectedTrade.id,
           )
         : [],
     [breaches, selectedTrade],

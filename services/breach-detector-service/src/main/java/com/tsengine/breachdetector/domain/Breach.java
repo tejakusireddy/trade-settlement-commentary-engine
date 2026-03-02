@@ -55,7 +55,7 @@ public class Breach {
             detectedAt = Instant.now();
         }
         if (status == null || status.isBlank()) {
-            status = "PENDING_COMMENTARY";
+            status = BreachStatuses.PENDING_COMMENTARY;
         }
     }
 
