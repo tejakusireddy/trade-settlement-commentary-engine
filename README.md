@@ -27,42 +27,38 @@ This platform replaces that loop end-to-end. It ingests trade flow, detects brea
 ## Architecture Diagram
 
 ```text
-┌────────────────────────────────────────────────────────────────────────────────────────────┐
-│ Frontend (React + TypeScript + Vite) :5173                                                │
-│ Dark terminal UI: Trades · Breaches · Reports · AI Usage · Audit                          │
-└─────────────────────────────────────────────────┬──────────────────────────────────────────┘
-                                                  │ HTTPS / JWT
-                                                  ▼
-┌────────────────────────────────────────────────────────────────────────────────────────────┐
-│ API Gateway :8080                                                                          │
-│ Keycloak JWT validation · RBAC · Redis rate limit · X-Request-ID · structured audit logs  │
-└───────────────────┬─────────────────────────────┬─────────────────────────────┬────────────┘
-                    │                             │                             │
-                    ▼                             ▼                             ▼
-┌────────────────────────────┐   ┌────────────────────────────┐   ┌────────────────────────────┐
-│ trade-ingest-service :8082 │   │ breach-detector-service    │   │ commentary-service :8084   │
-│ REST ingest + idempotency  │   │ :8083                      │   │ Claude generation + approve │
-│ PostgreSQL writes          │   │ settlement calendar + DLQ  │   │ AI usage audit + fallback   │
-└───────────────┬────────────┘   └───────────────┬────────────┘   └───────────────┬────────────┘
-                │ trade.events                   │ trade.breaches                  │ commentary.completed
-                │                                │                                 │ commentary.approved
-                └───────────────────┬────────────┴──────────────┬──────────────────┘
-                                    ▼                           ▼
-                  ┌────────────────────────────────────────────────────────────┐
-                  │ Apache Kafka + Schema Registry                            │
-                  │ trade.events · trade.breaches · commentary.completed      │
-                  │ commentary.approved · commentary.requests · trade.dlq     │
-                  └────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────── Frontend (React + TypeScript + Vite) :5173 ─────────────────────────────────────────────┐
+│                                      Dark terminal UI for Trades, Breaches, Reports, AI Usage, Audit                              │
+└──────────────────────────────────────────────────────────────────────┬───────────────────────────────────────────────────────────────┘
+                                                                       │ HTTPS / JWT
+                                                                       ▼
+┌──────────────────────────────────────────────────────────── API Gateway Service :8080 ────────────────────────────────────────────────┐
+│ JWT validation (Keycloak JWKS) · RBAC (ops-user/compliance-officer/admin) · Redis sliding-window rate limit · X-Request-ID · audit │
+└───────────────────────────────┬──────────────────────────────────────┬───────────────────────────────────────┬─────────────────────────┘
+                                │                                      │                                       │
+                                ▼                                      ▼                                       ▼
+            ┌──────────────────────────────┐          ┌──────────────────────────────┐         ┌──────────────────────────────────┐
+            │ trade-ingest-service :8082   │          │ breach-detector-service :8083 │         │ commentary-service :8084         │
+            │ REST ingest + idempotency    │          │ settlement breach detection   │         │ Claude generation + approvals    │
+            │ PostgreSQL writes            │          │ workflow status transitions    │         │ AI audit + cost controls         │
+            └──────────────┬───────────────┘          └──────────────┬───────────────┘         └──────────────┬───────────────────┘
+                           │                                          │                                        │
+                           │ trade.events                             │ trade.breaches                         │ commentary.completed
+                           │                                          │                                        │ commentary.approved
+                           ▼                                          ▼                                        ▼
+                    ┌──────────────────────────────────────────────────── Apache Kafka + Schema Registry ─────────────────────────────────┐
+                    │ topics: trade.events · trade.breaches · commentary.completed · commentary.approved · commentary.requests · trade.dlq │
+                    └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-┌──────────────────────────────┐  ┌───────────────────────┐  ┌──────────────────────────────┐
-│ PostgreSQL 16 (shared state) │  │ Redis 7               │  │ Elasticsearch 8 / Kibana     │
-│ trades · breaches · comments │  │ idempotency/rate/cost │  │ audit + search               │
-└──────────────────────────────┘  └───────────────────────┘  └──────────────────────────────┘
+                    ┌───────────────────────────────┐  ┌─────────────────────┐  ┌──────────────────────────┐  ┌──────────────────────────┐
+                    │ PostgreSQL 16 (shared state)  │  │ Redis 7             │  │ Elasticsearch 8 + Kibana │  │ Prometheus + Grafana     │
+                    │ trades/breaches/commentaries  │  │ idempotency/rate/cost │ │ audit/search sink target  │  │ metrics, SLO telemetry   │
+                    └───────────────────────────────┘  └─────────────────────┘  └──────────────────────────┘  └──────────────────────────┘
 
-┌──────────────────────────────┐                              ┌──────────────────────────────┐
-│ Keycloak :8180               │                              │ Anthropic Claude API         │
-│ realm: trade-settlement      │                              │ model: claude-sonnet-4-6     │
-└──────────────────────────────┘                              └──────────────────────────────┘
+                    ┌───────────────────────────────┐                                ┌──────────────────────────────────────────────────────┐
+                    │ Keycloak (OIDC/OAuth2) :8180  │                                │ Anthropic Claude API (claude-sonnet-4-6)           │
+                    │ realm: trade-settlement        │                                │ circuit-breaker guarded + template fallback         │
+                    └───────────────────────────────┘                                └──────────────────────────────────────────────────────┘
 ```
 
 ---
