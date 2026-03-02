@@ -1,104 +1,166 @@
-import axios, { type AxiosInstance } from 'axios';
+import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import type {
   AiCostSummary,
   ApiResponse,
   Breach,
   Commentary,
+  CreateTradeRequest,
   PagedResponse,
   Trade,
 } from '../types';
+import { refreshToken, triggerReauthentication } from '../auth/keycloak';
 
-const tradeClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8082',
+type RequestConfigWithMeta = InternalAxiosRequestConfig & {
+  metadata?: { requestId: string };
+  _retryAuthHandled?: boolean;
+};
+
+const pendingControllers = new Map<string, AbortController>();
+let reauthPromise: Promise<void> | null = null;
+
+export const gatewayClient = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080',
+  timeout: 10000,
+  headers: { 'Content-Type': 'application/json' },
 });
 
-const breachClient = axios.create({
-  baseURL: import.meta.env.VITE_BREACH_API_URL || 'http://localhost:8083',
-});
+const nextRequestId = () => crypto.randomUUID();
 
-const commentaryClient = axios.create({
-  baseURL: import.meta.env.VITE_COMMENTARY_API_URL || 'http://localhost:8084',
-});
+export const cancelActiveRequests = () => {
+  for (const controller of pendingControllers.values()) {
+    controller.abort();
+  }
+  pendingControllers.clear();
+};
 
-const aiClient = axios.create({
-  baseURL: import.meta.env.VITE_AI_API_URL || 'http://localhost:8084',
-});
+export const resetApiAuthState = () => {
+  reauthPromise = null;
+};
 
-const attachErrorInterceptor = (clientName: string, client: AxiosInstance) => {
-  client.interceptors.response.use(
-    (response) => response,
-    (error) => {
-      // Centralized API error logging for local debugging.
-      console.error(`[${clientName}] API error`, error);
-      throw error;
+const startReauthOnce = async () => {
+  if (!reauthPromise) {
+    reauthPromise = triggerReauthentication().finally(() => {
+      reauthPromise = null;
+    });
+  }
+  await reauthPromise;
+};
+
+const attachAuthInterceptor = (client: AxiosInstance) => {
+  client.interceptors.request.use(async (config: RequestConfigWithMeta) => {
+    const token = await refreshToken();
+    const requestId = nextRequestId();
+    const controller = new AbortController();
+    pendingControllers.set(requestId, controller);
+
+    config.metadata = { requestId };
+    config.signal = controller.signal;
+
+    if (token) {
+      if (!config.headers) {
+        config.headers = {} as never;
+      }
+      (config.headers as Record<string, string>).Authorization = `Bearer ${token}`;
+    } else if (config.headers && 'Authorization' in config.headers) {
+      delete (config.headers as Record<string, string>).Authorization;
+    }
+    return config;
+  });
+};
+
+const unwrapClient = (name: string, client: AxiosInstance) => {
+  (
+    client.interceptors.response.use as unknown as (
+      onFulfilled: (response: { data: unknown; config: RequestConfigWithMeta }) => unknown,
+      onRejected: (error: AxiosError<{ message?: string; success?: boolean }>) => Promise<never>,
+    ) => void
+  )(
+    (response) => {
+      const config = response.config as RequestConfigWithMeta;
+      const requestId = config.metadata?.requestId;
+      if (requestId) {
+        pendingControllers.delete(requestId);
+      }
+
+      const payload = response.data as ApiResponse<unknown> | unknown;
+      if (payload && typeof payload === 'object' && 'data' in (payload as Record<string, unknown>)) {
+        const typed = payload as ApiResponse<unknown>;
+        if (typed.success === false) {
+          throw new Error(typed.message || `Failed ${name} API request`);
+        }
+        return typed.data as unknown;
+      }
+      return payload as unknown;
+    },
+    async (error: AxiosError<{ message?: string; success?: boolean }>) => {
+      const config = (error.config ?? {}) as RequestConfigWithMeta;
+      const requestId = config.metadata?.requestId;
+      if (requestId) {
+        pendingControllers.delete(requestId);
+      }
+
+      if (error.response?.status === 401 && !config._retryAuthHandled) {
+        config._retryAuthHandled = true;
+        await startReauthOnce();
+      }
+
+      const envelopeMessage =
+        error.response?.data &&
+        typeof error.response.data === 'object' &&
+        'message' in error.response.data
+          ? error.response.data.message
+          : undefined;
+      const message = envelopeMessage || error.message || `Failed ${name} API request`;
+      console.error(`[${name}] API error:`, message, error);
+      return Promise.reject(new Error(message));
     },
   );
 };
 
-attachErrorInterceptor('trade', tradeClient);
-attachErrorInterceptor('breach', breachClient);
-attachErrorInterceptor('commentary', commentaryClient);
-attachErrorInterceptor('ai', aiClient);
+attachAuthInterceptor(gatewayClient);
+unwrapClient('gateway', gatewayClient);
+
+const normalizeList = <T>(payload: T[] | PagedResponse<T>) =>
+  Array.isArray(payload) ? payload : payload.content;
+
+const getUnwrapped = <T>(client: AxiosInstance, url: string) =>
+  client.get(url).then((payload) => payload as T);
+
+const postUnwrapped = <T>(client: AxiosInstance, url: string, body: unknown) =>
+  client.post(url, body).then((payload) => payload as T);
 
 export const tradeApi = {
-  get: async () => {
-    const response = await tradeClient.get<ApiResponse<PagedResponse<Trade>>>('/api/v1/trades');
-    return response.data;
-  },
-  create: async (payload: Partial<Trade>) => {
-    const response = await tradeClient.post<ApiResponse<Trade>>('/api/v1/trades', payload);
-    return response.data;
-  },
-  batch: async (payload: Partial<Trade>[]) => {
-    const response = await tradeClient.post<ApiResponse<Trade[]>>('/api/v1/trades/batch', payload);
-    return response.data;
-  },
+  list: () =>
+    getUnwrapped<Trade[] | PagedResponse<Trade>>(gatewayClient, '/api/v1/trades').then(normalizeList),
+  getById: (id: string) => getUnwrapped<Trade>(gatewayClient, `/api/v1/trades/${id}`),
+  create: (data: CreateTradeRequest) =>
+    postUnwrapped<Trade>(gatewayClient, '/api/v1/trades', data),
 };
 
 export const breachApi = {
-  list: async () => {
-    const response = await breachClient.get<ApiResponse<PagedResponse<Breach> | Breach[]>>('/api/v1/breaches');
-    return response.data;
-  },
-  getById: async (id: string) => {
-    const response = await breachClient.get<ApiResponse<Breach>>(`/api/v1/breaches/${id}`);
-    return response.data;
-  },
+  list: () =>
+    getUnwrapped<Breach[] | PagedResponse<Breach>>(gatewayClient, '/api/v1/breaches').then(
+      normalizeList,
+    ),
+  getById: (id: string) => getUnwrapped<Breach>(gatewayClient, `/api/v1/breaches/${id}`),
 };
 
 export const commentaryApi = {
-  list: async (page = 0, size = 20) => {
-    const response = await commentaryClient.get<ApiResponse<PagedResponse<Commentary>>>(
+  list: (page = 0, size = 20) =>
+    getUnwrapped<PagedResponse<Commentary>>(
+      gatewayClient,
       `/api/v1/commentaries?page=${page}&size=${size}`,
-    );
-    return response.data;
-  },
-  getById: async (id: string) => {
-    const response = await commentaryClient.get<ApiResponse<Commentary>>(`/api/v1/commentaries/${id}`);
-    return response.data;
-  },
-  getByBreachId: async (breachId: string) => {
-    const response = await commentaryClient.get<ApiResponse<Commentary>>(
-      `/api/v1/commentaries/breach/${breachId}`,
-    );
-    return response.data;
-  },
-  approve: async (id: string, approvedBy: string) => {
-    const response = await commentaryClient.post<ApiResponse<Commentary>>(
-      `/api/v1/commentaries/${id}/approve`,
-      { approvedBy },
-    );
-    return response.data;
-  },
-};
-
-export const aiApi = {
-  getCostToday: async () => {
-    const response = await aiClient.get<ApiResponse<AiCostSummary & Record<string, unknown>>>('/api/v1/ai/cost/today');
-    return response.data;
-  },
-  getCircuitBreaker: async () => {
-    const response = await aiClient.get<ApiResponse<Record<string, unknown>>>('/api/v1/ai/circuit-breaker');
-    return response.data;
-  },
+    ),
+  getById: (id: string) =>
+    getUnwrapped<Commentary>(gatewayClient, `/api/v1/commentaries/${id}`),
+  getByBreachId: (breachId: string) =>
+    getUnwrapped<Commentary>(gatewayClient, `/api/v1/commentaries/breach/${breachId}`),
+  approve: (id: string, approvedBy: string) =>
+    postUnwrapped<Commentary>(gatewayClient, `/api/v1/commentaries/${id}/approve`, {
+      approvedBy,
+    }),
+  getDailyCost: () =>
+    getUnwrapped<AiCostSummary>(gatewayClient, '/api/v1/ai/cost/today'),
+  getCircuitBreaker: () =>
+    getUnwrapped<Record<string, unknown>>(gatewayClient, '/api/v1/ai/circuit-breaker'),
 };

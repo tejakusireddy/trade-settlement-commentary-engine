@@ -1,21 +1,16 @@
 import { clsx } from 'clsx';
-import { format } from 'date-fns';
+import { format, parseISO, subDays } from 'date-fns';
 import { AlertTriangle, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import { breachApi, commentaryApi } from '../../services/api';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { SkeletonLoader } from '../../components/ui/SkeletonLoader';
-import type { Breach } from '../../types';
+import { useAuth } from '../../auth/AuthContext';
 
 type TypeFilter = 'ALL' | 'T2' | 'T3' | 'T5';
 type DateRangeFilter = '7d' | '30d' | '90d';
-
-function toArray<T>(data: T[] | { content?: T[] } | undefined): T[] {
-  if (!data) return [];
-  if (Array.isArray(data)) return data;
-  return data.content ?? [];
-}
 
 const reasonLabel: Record<string, string> = {
   MISSING_ASSIGNMENT: 'Missing Assignment',
@@ -26,40 +21,56 @@ const reasonLabel: Record<string, string> = {
 };
 
 export default function BreachesPage() {
+  const queryClient = useQueryClient();
+  const { canApprove, username, sessionKey } = useAuth();
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
   const [dateRange, setDateRange] = useState<DateRangeFilter>('30d');
-  const [selectedBreach, setSelectedBreach] = useState<Breach | null>(null);
+  const [selectedBreachId, setSelectedBreachId] = useState<string | null>(null);
 
-  const breachesQuery = useQuery({
-    queryKey: ['breaches', 'cards'],
-    queryFn: breachApi.list,
+  const { data: breaches = [], isLoading, isError } = useQuery({
+    queryKey: ['breaches', sessionKey],
+    queryFn: () => breachApi.list(),
     refetchInterval: 15_000,
   });
 
-  const commentaryMutation = useMutation({
-    mutationFn: (breachId: string) => commentaryApi.getByBreachId(breachId),
+  const selectedBreach = useMemo(
+    () => breaches.find((breach) => breach.id === selectedBreachId) ?? null,
+    [breaches, selectedBreachId],
+  );
+
+  const { data: commentary, isLoading: commentaryLoading } = useQuery({
+    queryKey: ['commentary', sessionKey, selectedBreachId],
+    queryFn: () => commentaryApi.getByBreachId(selectedBreachId as string),
+    enabled: !!selectedBreachId,
   });
 
-  const breaches = toArray(breachesQuery.data?.data);
+  const approveMutation = useMutation({
+    mutationFn: () => commentaryApi.approve(commentary?.id as string, username),
+    onSuccess: () => {
+      toast.success('Commentary approved');
+      void queryClient.invalidateQueries({ queryKey: ['commentary', sessionKey, selectedBreachId] });
+      void queryClient.invalidateQueries({ queryKey: ['commentaries', sessionKey] });
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to approve commentary');
+    },
+  });
 
   const filteredBreaches = useMemo(() => {
-    const now = Date.now();
-    const windowMs = dateRange === '7d' ? 7 * 86400000 : dateRange === '30d' ? 30 * 86400000 : 90 * 86400000;
+    const lowerBound = subDays(
+      new Date(),
+      dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : 90,
+    );
     return breaches.filter((b) => {
       const inType = typeFilter === 'ALL' ? true : b.breachType === typeFilter;
-      const inRange = now - new Date(b.detectedAt).getTime() <= windowMs;
+      const inRange = parseISO(b.detectedAt).getTime() >= lowerBound.getTime();
       return inType && inRange;
     });
   }, [breaches, dateRange, typeFilter]);
 
-  const openCommentaryModal = (breach: Breach) => {
-    setSelectedBreach(breach);
-    commentaryMutation.mutate(breach.id);
-  };
-
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between rounded-xl border border-[#2A2D35] bg-[#111318] p-4">
+      <div className="flex items-center justify-between rounded-lg border border-border-subtle bg-bg-surface p-4">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             {(['ALL', 'T2', 'T3', 'T5'] as const).map((type) => (
@@ -68,7 +79,7 @@ export default function BreachesPage() {
                 type="button"
                 className={clsx(
                   'rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
-                  typeFilter === type ? 'bg-primary text-black' : 'bg-[#1A1D24] text-text-secondary hover:text-text-primary',
+                  typeFilter === type ? 'bg-primary/10 text-primary' : 'bg-bg-raised text-text-secondary hover:text-text-primary',
                 )}
                 onClick={() => setTypeFilter(type)}
               >
@@ -84,7 +95,7 @@ export default function BreachesPage() {
                 type="button"
                 className={clsx(
                   'rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
-                  dateRange === range ? 'bg-primary text-black' : 'bg-[#1A1D24] text-text-secondary hover:text-text-primary',
+                  dateRange === range ? 'bg-primary/10 text-primary' : 'bg-bg-raised text-text-secondary hover:text-text-primary',
                 )}
                 onClick={() => setDateRange(range)}
               >
@@ -97,24 +108,28 @@ export default function BreachesPage() {
         <p className="text-sm text-text-secondary">{filteredBreaches.length} breaches found</p>
       </div>
 
-      {breachesQuery.isLoading ? (
+      {isLoading ? (
         <div className="space-y-3">
           <SkeletonLoader variant="row" />
           <SkeletonLoader variant="row" />
           <SkeletonLoader variant="row" />
+        </div>
+      ) : isError ? (
+        <div className="rounded-lg border border-danger/30 bg-bg-surface p-4 text-sm text-danger">
+          Failed to load breach data.
         </div>
       ) : (
         <div className="space-y-3">
           {filteredBreaches.map((breach) => (
             <div
               key={breach.id}
-              className="cursor-pointer rounded-xl border border-[#2A2D35] bg-[#111318] p-5 transition-all hover:border-[#3A3D45]"
-              onClick={() => setSelectedBreach(breach)}
+              className="cursor-pointer border-b border-border-subtle bg-bg-surface p-4 transition-colors hover:bg-bg-raised"
+              onClick={() => setSelectedBreachId(breach.id)}
             >
               <div className="flex items-start gap-4">
                 <span
                   className={clsx(
-                    'mt-1 block h-16 w-1 rounded',
+                    'mt-1 block h-12 w-[3px]',
                     breach.breachType === 'T5' ? 'bg-danger' : breach.breachType === 'T3' ? 'bg-warning' : 'bg-info',
                   )}
                 />
@@ -137,7 +152,7 @@ export default function BreachesPage() {
                     <span className="tabular-nums font-mono text-sm text-danger">
                       {breach.daysOverdue} days overdue
                     </span>
-                    <span className="rounded-full border border-[#2A2D35] bg-[#1A1D24] px-2 py-0.5 text-xs text-text-secondary">
+                    <span className="rounded-full bg-bg-raised px-2 py-0.5 text-xs text-text-secondary">
                       {reasonLabel[breach.breachReason] ?? breach.breachReason}
                     </span>
                     <span className="text-xs text-text-tertiary">
@@ -149,13 +164,13 @@ export default function BreachesPage() {
                 {breach.status === 'PENDING_COMMENTARY' ? (
                   <button
                     type="button"
-                    className="rounded-lg border border-ai-accent/20 bg-ai-accent/10 px-3 py-2 text-xs font-medium text-ai-accent transition-colors hover:bg-ai-accent hover:text-black"
+                    className="inline-flex items-center gap-1 text-sm text-ai-accent transition-colors hover:text-text-primary"
                     onClick={(e) => {
                       e.stopPropagation();
-                      openCommentaryModal(breach);
+                      setSelectedBreachId(breach.id);
                     }}
                   >
-                    Generate Commentary
+                    Generate Commentary →
                   </button>
                 ) : null}
               </div>
@@ -165,9 +180,9 @@ export default function BreachesPage() {
       )}
 
       {selectedBreach ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-[600px] rounded-2xl border border-[#2A2D35] bg-[#111318] p-5 shadow-card">
-            <div className="mb-4 flex items-start justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-[600px] rounded-xl border border-border-subtle bg-bg-surface p-5">
+            <div className="mb-4 flex items-start justify-between border-b border-border-subtle pb-4">
               <div>
                 <h3 className="text-base font-semibold text-text-primary">Commentary</h3>
                 <p className="text-xs text-text-secondary">
@@ -175,22 +190,33 @@ export default function BreachesPage() {
                 </p>
               </div>
               <button
-                className="rounded-lg p-1 text-text-secondary transition-colors hover:bg-[#1A1D24] hover:text-text-primary"
+                className="rounded p-1 text-text-secondary transition-colors hover:bg-bg-raised hover:text-text-primary"
                 type="button"
-                onClick={() => setSelectedBreach(null)}
+                onClick={() => setSelectedBreachId(null)}
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="min-h-36 rounded-lg border border-[#2A2D35] bg-[#0A0B0D] p-4">
-              {commentaryMutation.isPending ? (
+            <div className="relative my-4 min-h-36 pl-4">
+              {commentary?.generationType ? (
+                <div className="absolute right-3 top-3">
+                  <StatusBadge status={commentary.generationType} size="sm" />
+                </div>
+              ) : null}
+
+              {commentaryLoading ? (
                 <div className="flex items-center gap-2 text-ai-accent">
                   <span className="h-2 w-2 animate-pulse rounded-full bg-ai-accent" />
-                  <span className="text-sm">Generating with Claude AI...</span>
+                  <span className="text-sm">Fetching AI commentary...</span>
                 </div>
-              ) : commentaryMutation.data?.data?.content ? (
-                <p className="leading-relaxed text-text-primary">{commentaryMutation.data.data.content}</p>
+              ) : commentary?.content ? (
+                <div className={clsx('border-l-[3px] border-l-ai-accent py-1 pl-4')}>
+                  <p className="text-sm leading-[1.7] text-text-primary">{commentary.content}</p>
+                  <p className="mt-2 text-[11px] text-text-secondary">
+                    Generated by Claude AI · {commentary.promptVersion} · $0.003
+                  </p>
+                </div>
               ) : (
                 <div className="flex items-center gap-2 text-text-secondary">
                   <AlertTriangle className="h-4 w-4" />
@@ -202,17 +228,29 @@ export default function BreachesPage() {
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
-                className="rounded-lg border border-[#2A2D35] bg-[#1A1D24] px-3 py-2 text-xs text-text-secondary transition-colors hover:text-text-primary"
-                onClick={() => setSelectedBreach(null)}
+                className="rounded-lg border border-border-subtle bg-bg-raised px-3 py-2 text-xs text-text-secondary transition-colors hover:text-text-primary"
+                onClick={() => setSelectedBreachId(null)}
               >
                 Close
               </button>
-              <button
-                type="button"
-                className="rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary hover:text-black"
-              >
-                Approve
-              </button>
+              {commentary && !commentary.approvedBy && canApprove ? (
+                <button
+                  type="button"
+                  disabled={approveMutation.isPending}
+                  onClick={() => approveMutation.mutate()}
+                  className="rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary hover:text-black disabled:opacity-50"
+                >
+                  {approveMutation.isPending ? 'Approving...' : 'Approve'}
+                </button>
+              ) : commentary && !commentary.approvedBy ? (
+                <span className="rounded-lg border border-border-subtle bg-bg-raised px-3 py-2 text-xs text-text-secondary">
+                  Approval requires compliance-officer or admin role
+                </span>
+              ) : (
+                <span className="rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-medium text-primary">
+                  Approved
+                </span>
+              )}
             </div>
           </div>
         </div>

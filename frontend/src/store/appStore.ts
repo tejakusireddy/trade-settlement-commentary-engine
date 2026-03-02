@@ -5,6 +5,7 @@ interface AppState {
   setSelectedBreachId: (id: string | null) => void;
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
+  resetAppState: () => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -12,4 +13,9 @@ export const useAppStore = create<AppState>((set) => ({
   setSelectedBreachId: (id) => set({ selectedBreachId: id }),
   sidebarCollapsed: false,
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+  resetAppState: () =>
+    set({
+      selectedBreachId: null,
+      sidebarCollapsed: false,
+    }),
 }));
